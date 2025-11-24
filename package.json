@@ -1,12 +1,13 @@
 {
   "name": "koishi-plugin-comfyui-workflow",
   "description": "一个Koishi适用的ComfyUI客户端插件",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
     "lib",
-    "dist"
+    "dist",
+    "workflows"
   ],
   "license": "MIT",
   "scripts": {},
@@ -33,5 +34,8 @@
     "openai": "^5.13.1",
     "uuid": "^11.1.0",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "yml-register": "^1.2.5"
   }
 }
