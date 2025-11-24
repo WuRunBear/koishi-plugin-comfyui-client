@@ -304,7 +304,7 @@ export class ComfyUINode {
    * @param {boolean} avoidCache - 是否避免缓存，默认true
    * @returns {Object} 修改后的prompt
    */
-  _modifyPromptToAvoidCache(promptJson, avoidCache = true) {
+  modifyPromptToAvoidCache(promptJson, avoidCache = true) {
     if (!avoidCache) {
       return promptJson;
     }
@@ -312,12 +312,21 @@ export class ComfyUINode {
     // 深拷贝prompt以避免修改原始对象
     const modifiedPrompt = JSON.parse(JSON.stringify(promptJson));
 
+    return modifiedPrompt;
+  }
+
+  /**
+   * 更新工作流的seed
+   * @param {Object} workflowJson - JSON格式的prompt 
+   * @returns {Object} 修改后的prompt 
+   */
+  updateSeed(workflowJson, seed) {
     // 生成随机seed
-    const randomSeed = Math.floor(Math.random() * 1000000000000000);
+    const randomSeed = seed || Math.floor(Math.random() * 1000000000000000);
 
     // 查找并修改所有包含seed的节点
-    for (const nodeId in modifiedPrompt) {
-      const node = modifiedPrompt[nodeId];
+    for (const nodeId in workflowJson) {
+      const node = workflowJson[nodeId];
       if (node.inputs && typeof node.inputs.seed !== 'undefined') {
         node.inputs.seed = randomSeed;
       }
@@ -328,7 +337,7 @@ export class ComfyUINode {
       }
     }
 
-    return modifiedPrompt;
+    return workflowJson;
   }
 
   /**
@@ -346,12 +355,11 @@ export class ComfyUINode {
     try {
 
       // 0. 修改prompt
-      const newSeedPrompt = this._modifyPromptToAvoidCache(workflowJson, avoidCache);
-      const finalPrompt = JSON.parse(JSON.stringify(newSeedPrompt).replace("114514.1919810", userPrompt))
+      const newSeedPrompt = this.modifyPromptToAvoidCache(workflowJson, avoidCache);
       // 1. 建立WebSocket连接
       await this.connect();
       // 2. 提交prompt到队列
-      const queueResult = await this.queuePrompt(finalPrompt);
+      const queueResult = await this.queuePrompt(newSeedPrompt);
       if (!queueResult.success) {
         await this.disconnect();
         return queueResult;

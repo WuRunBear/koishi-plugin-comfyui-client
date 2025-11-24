@@ -1,7 +1,7 @@
 {
-  "name": "koishi-plugin-comfyui-client",
+  "name": "@wurunbear/koishi-plugin-comfyui-client",
   "description": "一个Koishi适用的ComfyUI客户端插件",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -17,12 +17,12 @@
     "comfyui"
   ],
   "contributors": [
-    "flymyd <flymyd@foxmail.com>"
+    "WuRunBear"
   ],
-  "homepage": "https://github.com/flymyd/koishi-plugin-comfyui-client",
+  "homepage": "https://github.com/WuRunBear/koishi-plugin-comfyui-client",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/flymyd/koishi-plugin-comfyui-client.git"
+    "url": "git+https://github.com/WuRunBear/koishi-plugin-comfyui-client.git"
   },
   "peerDependencies": {
     "koishi": "^4.18.0"

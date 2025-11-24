@@ -4,8 +4,8 @@
       "seed": 812320824129823,
       "steps": 20,
       "cfg": 4,
-      "sampler_name": "euler",
-      "scheduler": "beta57",
+      "sampler_name": "{{sampler}}",
+      "scheduler": "{{scheduler}}",
       "denoise": 1,
       "model": [
         "16",
@@ -31,7 +31,7 @@
   },
   "6": {
     "inputs": {
-      "text": "114514.1919810",
+      "text": "{{prompt}}",
       "clip": [
         "10",
         0
@@ -97,8 +97,8 @@
   },
   "12": {
     "inputs": {
-      "width": 1024,
-      "height": 1024,
+      "width": "{{width}}",
+      "height": "{{height}}",
       "batch_size": 1
     },
     "class_type": "EmptySD3LatentImage",
