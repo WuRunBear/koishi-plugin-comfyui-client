@@ -1,5 +1,5 @@
 {
-  "name": "@wurunbear/koishi-plugin-comfyui-client",
+  "name": "koishi-plugin-comfyui-workflow",
   "description": "一个Koishi适用的ComfyUI客户端插件",
   "version": "0.0.1",
   "main": "lib/index.js",
