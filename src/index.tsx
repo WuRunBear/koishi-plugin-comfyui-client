@@ -122,7 +122,7 @@ export async function apply(ctx: Context) {
                     return <img src={dataUri} />
                 } else {
                     console.error('工作流执行失败:', result.error);
-                    return '执行失败';
+                    return `执行失败 ${result.error}`;
                 }
             } catch (error) {
                 console.error('执行工作流时发生错误:', error);
