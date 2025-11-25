@@ -5,7 +5,7 @@
 
 # koishi-plugin-comfyui-workflow
 
-[![npm](https://img.shields.io/npm/v/koishi-plugin-comfyui-client?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-comfyui-client)
+[![npm](https://img.shields.io/npm/v/koishi-plugin-comfyui-workflow?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-comfyui-workflow)
 [![GitHub](https://img.shields.io/github/stars/WuRunBear/koishi-plugin-comfyui-client?style=flat-square)](https://github.com/WuRunBear/koishi-plugin-comfyui-client)
 
 一个为 [Koishi](https://koishi.chat/) 设计的 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 客户端插件。它允许你通过 Koishi 机器人执行任何 ComfyUI 工作流，实现文生图等功能。
