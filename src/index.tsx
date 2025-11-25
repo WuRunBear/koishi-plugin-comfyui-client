@@ -24,13 +24,18 @@ export const Config: Schema<Config> = Schema.object({
 export async function apply(ctx: Context) {
     const root = path.join(ctx.baseDir, 'data', 'koishi-plugin-comfyui-client')
     const workflowsPath = path.join(root, "workflows")
-    const indexPath = path.join(root, "index.json");
-    const sampleWorkflowPath = path.join(root, "sample-workflow.json");
+    const indexPath = path.join(workflowsPath, "index.json");
+    const sampleWorkflowPath = path.join(workflowsPath, "sample-workflow.json");
+
+    console.log(root, workflowsPath, indexPath, sampleWorkflowPath, "root, workflowsPath, indexPath, sampleWorkflowPath")
 
     await fs.promises.mkdir(workflowsPath, { recursive: true })
     if (!fs.existsSync(indexPath)) {
+        console.log("索引文件不存在")
         await fs.promises.writeFile(indexPath, JSON.stringify(indexJson))
         await fs.promises.writeFile(sampleWorkflowPath, JSON.stringify(sampleWorkflowJson))
+    } else {
+        console.log("索引文件存在")
     }
 
     const COMFYUI_SERVER = ctx.config.serverEndpoint;
@@ -42,7 +47,7 @@ export async function apply(ctx: Context) {
             if (!fs.existsSync(indexPath)) {
                 throw new Error(`工作流索引文件不存在: ${indexPath}`);
             }
-            return JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+            return JSON.parse(fs.readFileSync(indexPath, 'utf-8')) as {[s: string]:{file: string,outputNodeIDArr: string[],description: string}};
         } catch (error) {
             console.error('加载工作流索引失败:', error);
             return {};
@@ -69,41 +74,41 @@ export async function apply(ctx: Context) {
 
         return {
             json: JSON.parse(fs.readFileSync(workflowPath, 'utf-8')),
-            outputNodeID: workflowInfo.outputNodeID
+            outputNodeIDArr: Array.isArray(workflowInfo.outputNodeIDArr)?workflowInfo.outputNodeIDArr:[workflowInfo.outputNodeIDArr]
         };
     };
 
     // 修改指令支持工作流参数
-    ctx.command('comfy [workflowName:string] [userPrompt:text] ComfyUI绘图')
+    ctx.command('comfy [userPrompt:text] ComfyUI绘图')
         .alias('cf')
-        .option('width', '-w [width] 图片宽', { fallback: 768 })
-        .option('height', '-h [height] 图片高', { fallback: 1344 })
-        .option('sampler', '-sa [sampler] 采样器', { fallback: "euler_ancestral" })
-        .option('scheduler', '-sc [scheduler] 调度器', { fallback: "karras" })
-        .option('seed', '-se [seed] 随机种', { fallback: "1003957085091878" })
-        .option('workflow', '-wf [workflow] 指定工作流名称')
-        .action(async (_, workflowName, userPrompt) => {
+        .option('width', '--wi [width] 图片宽', { fallback: 768 })
+        .option('height', '--he [height] 图片高', { fallback: 1344 })
+        .option('sampler', '--sa [sampler] 采样器', { fallback: "euler_ancestral" })
+        .option('scheduler', '--sc [scheduler] 调度器', { fallback: "karras" })
+        .option('seed', '--se [seed] 随机种', { fallback: "1003957085091878" })
+        .option('workflow', '--wf <workflow> 指定工作流名称')
+        .action(async (_, userPrompt) => {
             // 处理工作流名称参数（支持选项和位置参数）
-            const targetWorkflow = _.options.workflow || workflowName || ctx.config.defaultWorkflow;
+            const targetWorkflow = _.options.workflow || ctx.config.defaultWorkflow;
             const { width, height, sampler, scheduler, seed } = _.options;
 
             try {
                 // 加载指定工作流
-                const { json: promptJson, outputNodeID } = loadWorkflow(targetWorkflow);
+                const { json: promptJson, outputNodeIDArr } = loadWorkflow(targetWorkflow);
 
                 // LLM提示词增强逻辑保持不变
-                let finalUserPrompt = userPrompt;
+                let finalUserPrompt = userPrompt.replaceAll("\n", " ");
 
                 // 执行工作流
                 const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION);
 
                 let _promptJson = JSON.parse(
                     JSON.stringify(promptJson)
-                        .replace("{{prompt}}", userPrompt)
-                        .replace("{{width}}", width)
-                        .replace("{{height}}", height)
-                        .replace("{{sampler}}", sampler)
-                        .replace("{{scheduler}}", scheduler)
+                        .replaceAll("{{prompt}}", userPrompt)
+                        .replaceAll("{{width}}", width)
+                        .replaceAll("{{height}}", height)
+                        .replaceAll("{{sampler}}", sampler)
+                        .replaceAll("{{scheduler}}", scheduler)
                 );
 
                 _promptJson = comfyNode.updateSeed(_promptJson, seed);
@@ -112,21 +117,45 @@ export async function apply(ctx: Context) {
 
                 if (result.success) {
                     // 使用当前工作流的输出节点ID
-                    const finalResult = result.outputs[outputNodeID].images.map(item => ({
-                        filename: item.filename,
-                        buffer: item.buffer
-                    }));
-                    const imageBuffer = finalResult[0].buffer;
-                    const base64Image = imageBuffer.toString('base64');
-                    const dataUri = `data:image/png;base64,${base64Image}`;
-                    return <img src={dataUri} />
+                    const finalResult = [];
+                    outputNodeIDArr.forEach(outputNodeID => {
+                        result.outputs[outputNodeID].images.map(item => {
+                            const base64 = `data:image/png;base64,${item.buffer.toString('base64')}`;
+                            finalResult.push({
+                                filename: item.filename,
+                                buffer: item.buffer,
+                                base64,
+                                html: <img src={base64} />,
+                            })
+                        })
+                        result.outputs[outputNodeID].texts.map(item => {
+                            finalResult.push({
+                                text: item.text,
+                                html: <p>{item.text}</p>,
+                            })
+                        })
+                    });
+                    return finalResult.map(item => item.html)
                 } else {
                     console.error('工作流执行失败:', result.error);
-                    return `执行失败 ${result.error}`;
+                    return `工作流执行失败 ${result.error.error.message} \n 参数：${JSON.stringify(_.options)} prompt: ${userPrompt}`;
                 }
             } catch (error) {
                 console.error('执行工作流时发生错误:', error);
-                return `执行失败: ${error.message}`;
+                return `执行工作流时发生错误: ${error.message} \n 参数：${JSON.stringify(_.options)} prompt: ${userPrompt}`;
             }
+        })
+    ctx.command('comfyls 查看工作流')
+        .alias('cfls')
+        .action(async (_) => {
+            const indexArr = loadWorkflowIndex()
+            console.log('查看工作流:', indexArr);
+            const finalResult = []
+            for (const [name, obj] of Object.entries(indexArr)) {
+                finalResult.push({
+                    html: <p>{name} {obj?.description}</p>
+                })
+            }
+            return finalResult.map(item => item.html)
         })
 }

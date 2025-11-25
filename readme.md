@@ -3,22 +3,23 @@
 - 去掉llm增强提示词的功能，我觉得这个功能可以在工作流中实现
 - 新增多工作流功能
 
-# koishi-plugin-comfyui-client
+# koishi-plugin-comfyui-workflow
 
 [![npm](https://img.shields.io/npm/v/koishi-plugin-comfyui-client?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-comfyui-client)
-[![GitHub](https://img.shields.io/github/stars/flymyd/koishi-plugin-comfyui-client?style=flat-square)](https://github.com/flymyd/koishi-plugin-comfyui-client)
+[![GitHub](https://img.shields.io/github/stars/WuRunBear/koishi-plugin-comfyui-client?style=flat-square)](https://github.com/WuRunBear/koishi-plugin-comfyui-client)
 
 一个为 [Koishi](https://koishi.chat/) 设计的 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 客户端插件。它允许你通过 Koishi 机器人执行任何 ComfyUI 工作流，实现文生图等功能。
 
 ## ✨ 功能特性
 
 - **高度可定制**: 支持通过 JSON 加载任意 ComfyUI 工作流。
-- **文生图指令**: 提供 `comfy` 指令，方便用户通过文本生成图片。
+- **文生图指令**: 提供 `comfy`、`cf` 指令，方便用户通过文本生成图片。
+- **查看工作流指令**: 提供 `comfyls`、`cfls` 指令，方便用户通过文本生成图片。
 - **动态连接**: 自动处理与 ComfyUI 服务器的 WebSocket 连接和 HTTP 请求。
 
 ## 💿 安装
 
-在 Koishi 插件市场搜索 `comfyui-client` 并安装。
+在 Koishi 插件市场搜索 `comfyui-workflow` 并安装。
 
 ## ⚙️ 配置项
 
@@ -54,6 +55,10 @@
 
 ```
 comfy <你的提示词>
+```
+
+```
+comfy --wf [工作流名称] <你的提示词>
 ```
 
 **示例:**

@@ -254,8 +254,9 @@ export class ComfyUINode {
             // 处理输出结果
             for (const nodeId of Object.keys(history.outputs || {})) {
               const nodeOutput = history.outputs[nodeId];
+              const images = [];
+              const texts = [];
               if (nodeOutput.images) {
-                const images = [];
                 for (const imageInfo of nodeOutput.images) {
                   if (imageInfo.type === 'output') {
                     const imageResult = await this.getImage(
@@ -275,8 +276,15 @@ export class ComfyUINode {
                     }
                   }
                 }
-                outputs[nodeId] = { images };
               }
+              if (nodeOutput.text) {
+                for (const text of nodeOutput.text) {
+                  texts.push({
+                    text
+                  });
+                }
+              }
+              outputs[nodeId] = { images, texts };
             }
 
             resolve({
@@ -379,7 +387,7 @@ export class ComfyUINode {
 
       return {
         success: false,
-        error: error.message,
+        error: {error: {message: error.message},},
         message: 'Workflow execution failed'
       };
     }

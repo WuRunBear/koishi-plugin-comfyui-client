@@ -1,20 +1,14 @@
 {
   "name": "koishi-plugin-comfyui-workflow",
-  "description": "一个Koishi适用的ComfyUI客户端插件",
-  "version": "0.0.3",
+  "description": "一个Koishi适用的ComfyUI客户端插件，支持多工作流",
+  "version": "0.0.4",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
     "lib",
-    "dist",
-    "workflows"
+    "dist"
   ],
   "license": "MIT",
-  "scripts": {
-    "build": "npx tsc && npx esbuild src/index.tsx --bundle --platform=node --target=node20 --jsx=transform --jsx-factory=h --jsx-import-source=@satorijs/element --outfile=lib/index.js",
-    "build:tsc": "npx tsc",
-    "build:bundle": "npx esbuild src/index.tsx --bundle --platform=node --target=node20 --jsx=transform --jsx-factory=h --jsx-import-source=@satorijs/element --outfile=lib/index.js"
-  },
   "keywords": [
     "chatbot",
     "koishi",
@@ -38,9 +32,5 @@
     "openai": "^5.13.1",
     "uuid": "^11.1.0",
     "ws": "^8.18.3"
-  },
-  "devDependencies": {
-    "esbuild": "^0.27.0",
-    "yml-register": "^1.2.5"
   }
 }

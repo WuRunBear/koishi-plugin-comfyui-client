@@ -1,69 +1,42 @@
 {
   "3": {
     "inputs": {
-      "seed": 812320824129823,
-      "steps": 20,
-      "cfg": 4,
-      "sampler_name": "{{sampler}}",
-      "scheduler": "{{scheduler}}",
-      "denoise": 1,
-      "model": [
-        "16",
+      "text": [
+        "9",
         0
       ],
-      "positive": [
+      "clip": [
+        "12",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码器"
+    }
+  },
+  "4": {
+    "inputs": {
+      "text": "covered navel, chibi, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, logo, patreon username, patreon logo, web address, artist name, blurry background,",
+      "clip": [
+        "12",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码器"
+    }
+  },
+  "5": {
+    "inputs": {
+      "samples": [
         "6",
         0
       ],
-      "negative": [
-        "7",
-        0
-      ],
-      "latent_image": [
-        "12",
-        0
-      ]
-    },
-    "class_type": "KSampler",
-    "_meta": {
-      "title": "K采样器"
-    }
-  },
-  "6": {
-    "inputs": {
-      "text": "{{prompt}}",
-      "clip": [
-        "10",
-        0
-      ]
-    },
-    "class_type": "CLIPTextEncode",
-    "_meta": {
-      "title": "CLIP文本编码"
-    }
-  },
-  "7": {
-    "inputs": {
-      "text": "low quality, bad anatomy, extra digits, missing digits, extra limbs, missing limbs",
-      "clip": [
-        "10",
-        0
-      ]
-    },
-    "class_type": "CLIPTextEncode",
-    "_meta": {
-      "title": "CLIP文本编码"
-    }
-  },
-  "8": {
-    "inputs": {
-      "samples": [
-        "3",
-        0
-      ],
       "vae": [
-        "15",
-        0
+        "12",
+        2
       ]
     },
     "class_type": "VAEDecode",
@@ -71,11 +44,173 @@
       "title": "VAE解码"
     }
   },
+  "6": {
+    "inputs": {
+      "seed": 1003957085091876,
+      "steps": 24,
+      "cfg": 4.5,
+      "sampler_name": "{{sampler}}",
+      "scheduler": "{{scheduler}}",
+      "denoise": 1,
+      "model": [
+        "12",
+        0
+      ],
+      "positive": [
+        "3",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "latent_image": [
+        "7",
+        4
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "7": {
+    "inputs": {
+      "width": "{{width}}",
+      "height": "{{height}}",
+      "aspect_ratio": "custom",
+      "swap_dimensions": "Off",
+      "upscale_factor": 1,
+      "batch_size": 1
+    },
+    "class_type": "CR SDXL Aspect Ratio",
+    "_meta": {
+      "title": "SDXL宽高比v2"
+    }
+  },
   "9": {
     "inputs": {
-      "filename_prefix": "ComfyUI",
+      "action": "append",
+      "tidy_tags": "yes",
+      "text_a": "style two,",
+      "text_b": "{{prompt}}",
+      "text_c": "very awa, masterpiece, best quality, amazing quality, very aesthetic, absurdres, highres, newest,"
+    },
+    "class_type": "StringFunction|pysssss",
+    "_meta": {
+      "title": "字符串操作"
+    }
+  },
+  "12": {
+    "inputs": {
+      "ckpt_name": "xl/Orange_Flavored_NAI_v2.0.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Checkpoint加载器(简易)"
+    }
+  },
+  "15": {
+    "inputs": {
+      "model_name": "4x-AnimeSharp.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "放大模型加载器"
+    }
+  },
+  "16": {
+    "inputs": {
+      "scale_method": "area",
+      "seed": 745492909,
+      "steps": 20,
+      "cfg": 4.5,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "normal",
+      "denoise": 0.4,
+      "use_tiled_vae": true,
+      "tile_size": 512,
+      "model": [
+        "12",
+        0
+      ],
+      "vae": [
+        "12",
+        2
+      ],
+      "positive": [
+        "3",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "upscale_model_opt": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "PixelKSampleUpscalerProvider",
+    "_meta": {
+      "title": "K采样像素缩放器"
+    }
+  },
+  "17": {
+    "inputs": {
+      "upscale_factor": 1.2000000000000002,
+      "steps": 1,
+      "temp_prefix": "",
+      "step_mode": "simple",
+      "samples": [
+        "19",
+        0
+      ],
+      "upscaler": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "IterativeLatentUpscale",
+    "_meta": {
+      "title": "Latent迭代缩放"
+    }
+  },
+  "18": {
+    "inputs": {
+      "samples": [
+        "17",
+        0
+      ],
+      "vae": [
+        "17",
+        1
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "19": {
+    "inputs": {
+      "noise_seed": 894426863336958,
+      "noise_strength": 1,
+      "latent": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "InjectLatentNoise+",
+    "_meta": {
+      "title": "插入噪波Latent"
+    }
+  },
+  "71": {
+    "inputs": {
+      "filename_prefix": "noob_chat/png/ComfyUI",
       "images": [
-        "8",
+        "5",
         0
       ]
     },
@@ -84,60 +219,17 @@
       "title": "保存图像"
     }
   },
-  "10": {
+  "72": {
     "inputs": {
-      "clip_name": "text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors",
-      "type": "chroma",
-      "device": "default"
-    },
-    "class_type": "CLIPLoader",
-    "_meta": {
-      "title": "加载CLIP"
-    }
-  },
-  "12": {
-    "inputs": {
-      "width": "{{width}}",
-      "height": "{{height}}",
-      "batch_size": 1
-    },
-    "class_type": "EmptySD3LatentImage",
-    "_meta": {
-      "title": "空Latent图像（SD3）"
-    }
-  },
-  "13": {
-    "inputs": {
-      "unet_name": "chroma-unlocked-v50.safetensors",
-      "weight_dtype": "default"
-    },
-    "class_type": "UNETLoader",
-    "_meta": {
-      "title": "UNet加载器"
-    }
-  },
-  "15": {
-    "inputs": {
-      "vae_name": "ae.safetensors"
-    },
-    "class_type": "VAELoader",
-    "_meta": {
-      "title": "加载VAE"
-    }
-  },
-  "16": {
-    "inputs": {
-      "scale_low": 1,
-      "scale_high": 2.5000000000000004,
-      "freq_cutoff": 30,
-      "model": [
-        "13",
+      "filename_prefix": "noob_chat/png/ComfyUI",
+      "images": [
+        "18",
         0
       ]
     },
-    "class_type": "FreSca",
+    "class_type": "SaveImage",
     "_meta": {
-      "title": "FreSca"
+      "title": "保存图像"
     }
   }
 }

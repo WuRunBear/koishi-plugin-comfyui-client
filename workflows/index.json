@@ -1,7 +1,10 @@
 {
   "default": {
     "file": "sample-workflow.json",
-    "outputNodeID": "9",
+    "outputNodeIDArr": [
+      "71",
+      "72"
+    ],
     "description": "默认文生图工作流"
   }
 }
