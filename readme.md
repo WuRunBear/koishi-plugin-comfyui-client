@@ -33,21 +33,53 @@
 
 ---
 
-### 如何获取 `workflowJSON` 和 `picOutputNodeID`
+# 如何配置和管理工作流
 
-为了让插件知道如何执行你的工作流，你需要从 ComfyUI 导出它。
+二次开发后，插件支持多工作流管理，你需要按照以下步骤准备和配置工作流：
 
-1. **在 ComfyUI 中构建你的工作流**。
-   - 确保你的工作流中有一个接收正面提示词的 `CLIPTextEncode` 节点。
-   - 将该节点的 `text` 输入框内容设置为一个独特的占位符：`114514.1919810`。插件会自动将用户的输入替换到这里。
-   - 记下最终生成图像的 `SaveImage` 节点的 ID。你可以在节点标题上看到这个数字。
-2. **导出工作流**。
-   - 点击 ComfyUI 界面右侧的 `Save (API Format)` 按钮。
-   - 这会导出一个 JSON 文件。
-3. **填入配置**。
-   - 用文本编辑器打开刚刚下载的 JSON 文件，**复制所有内容**。
-   - 将复制的内容粘贴到插件配置的 `workflowJSON` 文本框中。
-   - 将在步骤 1 中记下的 `SaveImage` 节点 ID (例如 `9`) 填入 `picOutputNodeID` 字段。
+## 1. 准备工作流文件
+1. **在 ComfyUI 中构建工作流**
+   - 确保工作流包含接收正面提示词的处理节点（例如 `CLIPTextEncode` 或字符串处理节点）
+   - 将提示词输入框内容设置为 `{{prompt}}` 占位符（插件会自动替换为用户输入）
+   - 可根据需要添加 `{{width}}`、`{{height}}`、`{{sampler}}`、`{{scheduler}}` 等动态参数占位符
+   - 记下所有生成图像的 `SaveImage` 节点 ID（在节点标题上可见）
+
+2. **导出工作流**
+   - 点击 ComfyUI 右侧的 `Save (API Format)` 按钮
+   - 将导出的 JSON 文件保存到本地（建议命名为有意义的名称，如 `anime-style.json`）
+
+## 2. 配置工作流索引
+1. **工作流存放位置**
+   - 插件会自动在 Koishi 数据目录创建 `data/koishi-plugin-comfyui-client/workflows` 文件夹
+   - 将导出的工作流 JSON 文件放入该文件夹，可以在 Koishi 的资源管理器操作
+
+2. **编辑索引文件**
+   - 打开 `workflows` 文件夹中的 `index.json` 文件
+   - 按照以下格式添加工作流信息：
+   ```json
+   {
+     "工作流名称": {
+       "file": "工作流文件名.json",
+       "outputNodeIDArr": ["输出节点ID1", "输出节点ID2"],
+       "description": "工作流描述"
+     },
+     "default": {
+       "file": "sample-workflow.json",
+       "outputNodeIDArr": ["71", "72"],
+       "description": "默认文生图工作流"
+     }
+   }
+   ```
+   - `outputNodeIDArr` 填写步骤1中记下的所有 `SaveImage` 节点ID
+   - 可通过 `default` 字段指定默认使用的工作流
+
+## 3. 插件配置
+在 Koishi 插件配置页面，只需设置以下基础参数：
+- `serverEndpoint`: ComfyUI 服务器地址（格式：`域名/IP:端口`）
+- `isSecureConnection`: 是否使用 HTTPS/WSS 安全连接
+- `defaultWorkflow`: 默认工作流名称（需与 index.json 中的键名一致）
+
+完成以上配置后，即可通过 `comfy` 指令调用指定工作流生成图像，或使用 `comfyls` 指令查看所有可用工作流。
 
 ## 🚀 使用方法
 
