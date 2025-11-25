@@ -32,8 +32,8 @@ export async function apply(ctx: Context) {
     await fs.promises.mkdir(workflowsPath, { recursive: true })
     if (!fs.existsSync(indexPath)) {
         console.log("索引文件不存在")
-        await fs.promises.writeFile(indexPath, JSON.stringify(indexJson))
-        await fs.promises.writeFile(sampleWorkflowPath, JSON.stringify(sampleWorkflowJson))
+        await fs.promises.writeFile(indexPath, JSON.stringify(indexJson, null, 4))
+        await fs.promises.writeFile(sampleWorkflowPath, JSON.stringify(sampleWorkflowJson, null, 4))
     } else {
         console.log("索引文件存在")
     }
@@ -119,21 +119,23 @@ export async function apply(ctx: Context) {
                     // 使用当前工作流的输出节点ID
                     const finalResult = [];
                     outputNodeIDArr.forEach(outputNodeID => {
-                        result.outputs[outputNodeID].images.map(item => {
-                            const base64 = `data:image/png;base64,${item.buffer.toString('base64')}`;
-                            finalResult.push({
-                                filename: item.filename,
-                                buffer: item.buffer,
-                                base64,
-                                html: <img src={base64} />,
+                        if (result.outputs[outputNodeID]) {
+                            result.outputs[outputNodeID].images.map(item => {
+                                const base64 = `data:image/png;base64,${item.buffer.toString('base64')}`;
+                                finalResult.push({
+                                    filename: item.filename,
+                                    buffer: item.buffer,
+                                    base64,
+                                    html: <img src={base64} />,
+                                })
                             })
-                        })
-                        result.outputs[outputNodeID].texts.map(item => {
-                            finalResult.push({
-                                text: item.text,
-                                html: <p>{item.text}</p>,
+                            result.outputs[outputNodeID].texts.map(item => {
+                                finalResult.push({
+                                    text: item.text,
+                                    html: <p>{item.text}</p>,
+                                })
                             })
-                        })
+                        }
                     });
                     return finalResult.map(item => item.html)
                 } else {
