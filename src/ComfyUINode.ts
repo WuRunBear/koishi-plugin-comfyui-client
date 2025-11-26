@@ -357,7 +357,7 @@ export class ComfyUINode {
    * @param {boolean} options.avoidCache - 是否避免缓存，默认true
    * @returns {Promise<Object>} 执行结果
    */
-  async executePromptWorkflow(workflowJson: any, userPrompt: string, options: any = {}) {
+  async executePromptWorkflow(workflowJson: any, options: any = {}) {
     const { avoidCache = true } = options;
 
     try {

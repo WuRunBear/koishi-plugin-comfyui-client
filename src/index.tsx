@@ -97,14 +97,14 @@ export async function apply(ctx: Context) {
                 const { json: promptJson, outputNodeIDArr } = loadWorkflow(targetWorkflow);
 
                 // LLM提示词增强逻辑保持不变
-                let finalUserPrompt = userPrompt.replaceAll("\n", " ");
+                let finalUserPrompt = userPrompt.replaceAll("\n", " ").replaceAll('\"', '\\\"').replaceAll('(', '\\\(').replaceAll(')', '\\\)')
 
                 // 执行工作流
                 const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION);
 
                 let _promptJson = JSON.parse(
                     JSON.stringify(promptJson)
-                        .replaceAll("{{prompt}}", userPrompt)
+                        .replaceAll("{{prompt}}", finalUserPrompt)
                         .replaceAll("{{width}}", width)
                         .replaceAll("{{height}}", height)
                         .replaceAll("{{sampler}}", sampler)
@@ -113,7 +113,7 @@ export async function apply(ctx: Context) {
 
                 _promptJson = comfyNode.updateSeed(_promptJson, seed);
 
-                const result: any = await comfyNode.executePromptWorkflow(_promptJson, finalUserPrompt);
+                const result: any = await comfyNode.executePromptWorkflow(_promptJson);
 
                 if (result.success) {
                     // 使用当前工作流的输出节点ID
