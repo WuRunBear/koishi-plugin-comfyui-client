@@ -13,8 +13,8 @@
 ## ✨ 功能特性
 
 - **高度可定制**: 支持通过 JSON 加载任意 ComfyUI 工作流。
-- **文生图指令**: 提供 `comfy`、`cf` 指令，方便用户通过文本生成图片。
-- **查看工作流指令**: 提供 `comfyls`、`cfls` 指令，方便用户通过文本生成图片。
+- **文生图指令**: 提供 `comfy`、`cf` 指令，方便用户生成图片，引用图片时会自动上传。
+- **查看工作流指令**: 提供 `comfyls`、`cfls` 指令，方便用户查看工作流。
 - **动态连接**: 自动处理与 ComfyUI 服务器的 WebSocket 连接和 HTTP 请求。
 
 ## 💿 安装
@@ -38,21 +38,86 @@
 二次开发后，插件支持多工作流管理，你需要按照以下步骤准备和配置工作流：
 
 ## 1. 准备工作流文件
+
 1. **在 ComfyUI 中构建工作流**
    - 确保工作流包含接收正面提示词的处理节点（例如 `CLIPTextEncode` 或字符串处理节点）
    - 将提示词输入框内容设置为 `{{prompt}}` 占位符（插件会自动替换为用户输入）
-   - 可根据需要添加 `{{width}}`、`{{height}}`、`{{sampler}}`、`{{scheduler}}` 等动态参数占位符
+   - 可根据需要添加 `{{width}}`、`{{height}}`、`{{sampler}}`、`{{scheduler}}`、`{{image}}`动态参数占位符
+   ```json
+      "11": {
+         "inputs": {
+            "image": "{{image}}"
+         },
+         "class_type": "LoadImage",
+         "_meta": {
+            "title": "加载图像"
+         }
+      },
+      "27": {
+         "inputs": {
+            "text": "{{prompt}}",
+            "clip": [
+            "4",
+            1
+            ]
+         },
+         "class_type": "CLIPTextEncode",
+         "_meta": {
+            "title": "CLIP文本编码器"
+         }
+      },
+      "29": {
+         "inputs": {
+            "width": "{{width}}",
+            "height": "{{height}}",
+            "batch_size": 1
+         },
+         "class_type": "EmptyLatentImage",
+         "_meta": {
+            "title": "空Latent"
+         }
+      },
+      "3": {
+         "inputs": {
+            "seed": 942500763821827,
+            "steps": 30,
+            "cfg": 4,
+            "sampler_name": "{{sampler}}",
+            "scheduler": "{{scheduler}}",
+            "denoise": 1,
+            "model": [
+            "4",
+            0
+            ],
+            "positive": [
+            "27",
+            0
+            ],
+            "negative": [
+            "28",
+            0
+            ],
+            "latent_image": [
+            "29",
+            0
+            ]
+         },
+         "class_type": "KSampler",
+         "_meta": {
+            "title": "K采样器"
+         }
+      },
+   ```
    - 记下所有生成图像的 `SaveImage` 节点 ID（在节点标题上可见）
-
 2. **导出工作流**
    - 点击 ComfyUI 右侧的 `Save (API Format)` 按钮
    - 将导出的 JSON 文件保存到本地（建议命名为有意义的名称，如 `anime-style.json`）
 
 ## 2. 配置工作流索引
+
 1. **工作流存放位置**
    - 插件会自动在 Koishi 数据目录创建 `data/koishi-plugin-comfyui-client/workflows` 文件夹
    - 将导出的工作流 JSON 文件放入该文件夹，可以在 Koishi 的资源管理器操作
-
 2. **编辑索引文件**
    - 打开 `workflows` 文件夹中的 `index.json` 文件
    - 按照以下格式添加工作流信息：
@@ -74,7 +139,9 @@
    - 可通过 `default` 字段指定默认使用的工作流
 
 ## 3. 插件配置
+
 在 Koishi 插件配置页面，只需设置以下基础参数：
+
 - `serverEndpoint`: ComfyUI 服务器地址（格式：`域名/IP:端口`）
 - `isSecureConnection`: 是否使用 HTTPS/WSS 安全连接
 - `defaultWorkflow`: 默认工作流名称（需与 index.json 中的键名一致）
