@@ -1,4 +1,4 @@
-import { Context, Schema } from 'koishi'
+import { Context, Session, Schema, h, Dict } from 'koishi'
 import { ComfyUINode } from './ComfyUINode';
 import fs from 'fs';
 import path from 'path';
@@ -73,7 +73,7 @@ export async function apply(ctx: Context) {
         }
 
         return {
-            json: JSON.parse(fs.readFileSync(workflowPath, 'utf-8')),
+            json: fs.readFileSync(workflowPath, 'utf-8'),
             outputNodeIDArr: Array.isArray(workflowInfo.outputNodeIDArr)?workflowInfo.outputNodeIDArr:[workflowInfo.outputNodeIDArr]
         };
     };
@@ -88,6 +88,22 @@ export async function apply(ctx: Context) {
         .option('seed', '--se [seed] 随机种', { fallback: "1003957085091878" })
         .option('workflow', '--wf <workflow> 指定工作流名称')
         .action(async (_, userPrompt) => {
+            let message = _.session.event.message;
+            let imgQu = []
+            if (message.quote) {
+                imgQu = h.select(message.quote.elements, "img");
+                // 如果有引用其他消息，消息内容会被添加到userPrompt，需要在这里去掉
+                userPrompt = userPrompt.replaceAll(h.unescape(message.quote.content), " ")
+            }
+            const img = {
+                src: "",
+                filename: "",
+            }
+            if (imgQu.length) {
+                img.src = imgQu[0].attrs.src;
+                img.filename = `${Date.now()}_${imgQu[0].attrs.file}`;
+            }
+
             // 处理工作流名称参数（支持选项和位置参数）
             const targetWorkflow = _.options.workflow || ctx.config.defaultWorkflow;
             const { width, height, sampler, scheduler, seed } = _.options;
@@ -102,18 +118,33 @@ export async function apply(ctx: Context) {
                 // 执行工作流
                 const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION);
 
+                if (img.src) {
+                    const arraybuffer = await ctx.http.get(img.src, { responseType: "arraybuffer" });
+                    await comfyNode.uploadImage(new Blob([arraybuffer]), img.filename)
+                } else {
+                    // 如果没有图片则使用已有的图片
+                    const inputList = await comfyNode.getInputList();
+                    img.filename = inputList.data[0];
+                }
+
                 let _promptJson = JSON.parse(
-                    JSON.stringify(promptJson)
+                    promptJson
                         .replaceAll("{{prompt}}", finalUserPrompt)
                         .replaceAll("{{width}}", width)
                         .replaceAll("{{height}}", height)
                         .replaceAll("{{sampler}}", sampler)
                         .replaceAll("{{scheduler}}", scheduler)
+                        .replaceAll("{{image}}", img.filename)
                 );
 
                 _promptJson = comfyNode.updateSeed(_promptJson, seed);
 
-                const result: any = await comfyNode.executePromptWorkflow(_promptJson);
+                const quote = h("quote", { id: _.session.messageId });
+                let workingMessageIds = [""];
+
+                const result: any = await comfyNode.executePromptWorkflow(_promptJson, async () => {
+                    workingMessageIds = await _.session.send(h("p", quote, "任务已提交，正在生成..."))
+                });
 
                 if (result.success) {
                     // 使用当前工作流的输出节点ID

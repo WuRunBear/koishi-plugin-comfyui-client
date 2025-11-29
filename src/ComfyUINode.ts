@@ -1,6 +1,7 @@
-import FormData from 'form-data';
 import WebSocket from 'ws';
 import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import fs from 'fs';
 
 export class ComfyUINode {
   serverEndpoint: any;
@@ -17,22 +18,19 @@ export class ComfyUINode {
   }
   /**
    * 用户上传图片，返回服务器的响应值
-   * @param {Buffer|ArrayBuffer} imageBuffer - 图片数据
+   * @param {Blob|File} image - 图片数据
    * @param {string} filename - 文件名
-   * @param {boolean} overwrite - 是否覆盖已存在的文件，默认true
+   * @param {boolean} overwrite - 是否覆盖已存在的文件，默认false
    * @returns {Promise<Object>} 服务器响应，包含success、data和message
    */
-  async uploadImage(imageBuffer, filename, overwrite = true) {
+  async uploadImage(image: Blob | File, filename: string, overwrite = false) {
     try {
       const formData = new FormData();
-      formData.append('image', imageBuffer, filename);
+      formData.append('image', image, filename);
       formData.append('overwrite', overwrite.toString());
+      formData.append('type', "input");
 
-      const response = await this.ctx.http.post(`${this.isSecureConnection ? 'https' : 'http'}://${this.serverEndpoint}/upload/image`, formData, {
-        headers: {
-          ...formData.getHeaders(),
-        },
-      });
+      const response = await this.ctx.http.post(`${this.isSecureConnection ? 'https' : 'http'}://${this.serverEndpoint}/api/upload/image`, formData, {});
 
       return {
         success: true,
@@ -40,6 +38,7 @@ export class ComfyUINode {
         message: 'Image uploaded successfully'
       };
     } catch (error) {
+      console.error(error, "error")
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -210,6 +209,28 @@ export class ComfyUINode {
   }
 
   /**
+   * 获取上传的图片列表
+   * @returns {Promise<String[]>} 图片列表
+   */
+  async getInputList() {
+    try {
+      const url = `${this.isSecureConnection ? 'https' : 'http'}://${this.serverEndpoint}/internal/files/input`;
+      const response = await this.ctx.http.get(url);
+
+      return {
+        success: true,
+        data: response,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data || error.message,
+        message: 'Failed to get input list'
+      };
+    }
+  }
+
+  /**
    * 等待prompt执行完成并获取结果
    * @param {string} promptId - prompt ID
    * @returns {Promise<Object>} 执行结果
@@ -357,7 +378,11 @@ export class ComfyUINode {
    * @param {boolean} options.avoidCache - 是否避免缓存，默认true
    * @returns {Promise<Object>} 执行结果
    */
-  async executePromptWorkflow(workflowJson: any, options: any = {}) {
+  async executePromptWorkflow(workflowJson: any, options: Record<string, any>|Function = {}, callback: Function = ()=>{}) {
+    if (typeof options === 'function') {
+      callback = options;
+      options = { avoidCache: true };
+    }
     const { avoidCache = true } = options;
 
     try {
@@ -372,6 +397,8 @@ export class ComfyUINode {
         await this.disconnect();
         return queueResult;
       }
+
+      callback();
 
       // 3. 等待执行完成
       const executionResult = await this.waitForCompletion(queueResult.prompt_id);
