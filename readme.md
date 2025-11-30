@@ -14,7 +14,7 @@
 
 - **高度可定制**: 支持通过 JSON 加载任意 ComfyUI 工作流。
 - **文生图指令**: 提供 `comfy`、`cf` 指令，方便用户生成图片，引用图片时会自动上传。
-- **查看工作流指令**: 提供 `comfyls`、`cfls` 指令，方便用户查看工作流。
+- **工作流管理指令**: 提供 `comfyls`、`cfls` 查看工作流；`comfyls.init`、`cfls.init` 初始化默认工作流文件。
 - **动态连接**: 自动处理与 ComfyUI 服务器的 WebSocket 连接和 HTTP 请求。
 
 ## 💿 安装
@@ -29,7 +29,8 @@
 |--|--|--|--|
 |`serverEndpoint`|`string`|`127.0.0.1:8188`|ComfyUI 服务器地址，格式为 `域名/IP:端口`。|
 |`isSecureConnection`|`boolean`|`false`|是否使用 `https` 和 `wss` 进行安全连接。|
-|`defaultWorkflow`|`string`|default|默认工作流名称|
+|`defaultWorkflow`|`string`|`default`|默认工作流名称|
+|`comfyuiSubfolder`|`string`|`temp`|上传引用图像的子文件夹（ComfyUI 输入目录）。|
 
 ---
 
@@ -116,8 +117,8 @@
 ## 2. 配置工作流索引
 
 1. **工作流存放位置**
-   - 插件会自动在 Koishi 数据目录创建 `data/koishi-plugin-comfyui-client/workflows` 文件夹
-   - 将导出的工作流 JSON 文件放入该文件夹，可以在 Koishi 的资源管理器操作
+   - 插件会自动在 Koishi 数据目录创建 `data/koishi-plugin-comfyui-client/workflows` 文件夹，或运行 `comfyls.init` 初始化默认索引与示例工作流
+   - 将导出的工作流 JSON 文件放入该文件夹（或替换示例文件），也可在 Koishi 的资源管理器操作
 2. **编辑索引文件**
    - 打开 `workflows` 文件夹中的 `index.json` 文件
    - 按照以下格式添加工作流信息：
@@ -145,8 +146,9 @@
 - `serverEndpoint`: ComfyUI 服务器地址（格式：`域名/IP:端口`）
 - `isSecureConnection`: 是否使用 HTTPS/WSS 安全连接
 - `defaultWorkflow`: 默认工作流名称（需与 index.json 中的键名一致）
+- `comfyuiSubfolder`: 上传引用图像的子文件夹（默认 `temp`，对应 ComfyUI 输入目录）
 
-完成以上配置后，即可通过 `comfy` 指令调用指定工作流生成图像，或使用 `comfyls` 指令查看所有可用工作流。
+完成以上配置后，即可通过 `comfy` 指令调用指定工作流生成图像；使用 `comfyls` 查看可用工作流，`comfyls.init` 初始化默认工作流文件。
 
 ## 🚀 使用方法
 
@@ -158,6 +160,18 @@ comfy <你的提示词>
 
 ```
 comfy --wf [工作流名称] <你的提示词>
+```
+
+首次使用建议先初始化工作流文件：
+
+```
+comfyls.init
+```
+
+查看可用工作流：
+
+```
+comfyls
 ```
 
 **示例:**

@@ -20,14 +20,14 @@ export class ComfyUINode {
    * 用户上传图片，返回服务器的响应值
    * @param {Blob|File} image - 图片数据
    * @param {string} filename - 文件名
-   * @param {boolean} overwrite - 是否覆盖已存在的文件，默认false
+   * @param {boolean} subfolder - 子文件夹
    * @returns {Promise<Object>} 服务器响应，包含success、data和message
    */
-  async uploadImage(image: Blob | File, filename: string, overwrite = false) {
+  async uploadImage(image: Blob | File, filename: string, subfolder = "temp") {
     try {
       const formData = new FormData();
       formData.append('image', image, filename);
-      formData.append('overwrite', overwrite.toString());
+      formData.append('subfolder', subfolder.toString());
       formData.append('type', "input");
 
       const response = await this.ctx.http.post(`${this.isSecureConnection ? 'https' : 'http'}://${this.serverEndpoint}/api/upload/image`, formData, {});
