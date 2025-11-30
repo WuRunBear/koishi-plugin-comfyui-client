@@ -44,10 +44,10 @@ export function loadWorkflowIndex(ctx: Context): WorkflowIndex {
   }
 }
 
-export function loadWorkflow(ctx: Context, name: string, defaultWorkflow: string) {
+export function loadWorkflow(ctx: Context, name: string) {
   const { workflowsPath } = resolvePaths(ctx)
   const index = loadWorkflowIndex(ctx)
-  const workflowInfo = index[name] || index[defaultWorkflow]
+  const workflowInfo = index[name]
 
   if (!workflowInfo) {
     throw new Error(`未找到工作流: ${name}`)

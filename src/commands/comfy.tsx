@@ -34,7 +34,7 @@ export function registerComfyCommand(ctx: Context) {
       const { width, height, sampler, scheduler, seed } = _.options
 
       try {
-        const { json: promptJson, outputNodeIDArr } = loadWorkflow(ctx, targetWorkflow, ctx.config.defaultWorkflow)
+        const { json: promptJson, outputNodeIDArr } = loadWorkflow(ctx, targetWorkflow)
         const finalUserPrompt = sanitizeUserPrompt(userPrompt)
         const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION)
 
@@ -52,7 +52,7 @@ export function registerComfyCommand(ctx: Context) {
           if (!uploadResult.success) {
             return `图片上传失败 ${uploadResult.error}`
           }
-          promptParams.image = uploadResult.data?.filename || promptParams.image
+          promptParams.image = `${uploadResult.data?.subfolder}/${uploadResult.data?.filename || promptParams.image}`
         } else {
           const inputList = await comfyNode.getInputList()
           promptParams.image = inputList.data[0]
