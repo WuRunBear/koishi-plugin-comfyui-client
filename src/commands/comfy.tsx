@@ -14,7 +14,7 @@ export function registerComfyCommand(ctx: Context) {
     .option('height', '--he [height] 图片高', { fallback: 1344 })
     .option('sampler', '--sa [sampler] 采样器', { fallback: 'euler_ancestral' })
     .option('scheduler', '--sc [scheduler] 调度器', { fallback: 'karras' })
-    .option('seed', '--se [seed] 随机种', { fallback: '1003957085091878' })
+    .option('seed', '--se [seed] 随机种')
     .option('workflow', '--wf <workflow> 指定工作流名称')
     .action(async (_, userPrompt) => {
       let message = _.session.event.message
