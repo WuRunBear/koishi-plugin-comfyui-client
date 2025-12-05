@@ -65,3 +65,51 @@ export function loadWorkflow(ctx: Context, name: string) {
 
   return { json, outputNodeIDArr }
 }
+
+// 创建空工作流
+export async function createEmptyWorkflow(
+  ctx: Context,
+  name: string,
+  description?: string,
+  outputNodeIDArr?: string[] | string,
+  content?: string
+): Promise<string> {
+  if (!name) {
+    throw new Error(`工作流名称不能为空`)
+  }
+
+  const { workflowsPath, indexPath } = resolvePaths(ctx)
+
+  // 1. 确保工作流目录存在
+  await ensureWorkflowFiles(ctx)
+  
+  // 2. 加载索引并检查是否已存在
+  const index = loadWorkflowIndex(ctx)
+  if (index[name]) {
+    throw new Error(`工作流 "${name}" 已存在`)
+  }
+
+  // 3. 构建文件路径和内容
+  const fileName = `${name}.json`
+  const workflowPath = path.join(workflowsPath, fileName)
+
+  // 空工作流模板（符合ComfyUI导入格式）
+  const emptyWorkflow = content
+    ? JSON.parse(content)
+    : {}
+
+  // 4. 写入空工作流文件
+  await fs.promises.writeFile(workflowPath, JSON.stringify(emptyWorkflow, null, 2))
+
+  console.log(`已创建空工作流: ${workflowPath}`)
+
+  // 5. 更新索引文件
+  index[name] = {
+    file: fileName,
+    outputNodeIDArr: outputNodeIDArr,  // 初始为空，用户后续可在index.json中配置
+    description: description || "新建空工作流"
+  }
+  await fs.promises.writeFile(indexPath, JSON.stringify(index, null, 2))
+
+  return fileName
+}

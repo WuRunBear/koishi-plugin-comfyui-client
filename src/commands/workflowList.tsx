@@ -1,5 +1,5 @@
 import { Context } from 'koishi'
-import { loadWorkflowIndex, ensureWorkflowFiles } from '../workflows/loader'
+import { loadWorkflowIndex, ensureWorkflowFiles, createEmptyWorkflow } from '../workflows/loader'
 
 export function registerWorkflowListCommand(ctx: Context) {
   ctx
@@ -20,5 +20,21 @@ export function registerWorkflowListCommand(ctx: Context) {
     .action(async (_) => {
       await ensureWorkflowFiles(ctx)
       return <p>工作流文件已初始化</p>
+    })
+
+  // 创建工作流命令
+  ctx
+    .command('comfyls.new <name:string> [content:text] 创建工作流')
+    .alias('cfls.new')
+    .option('description', '--desc [description:string] 工作流描述')
+    .option('outputNode', '--out [outputNode:string] 输出节点，逗号隔开')
+    .action(async (_, name, content) => {
+      try {
+        const fileName = await createEmptyWorkflow(ctx, name, _.options.description, _.options.outputNode?.split(','), content)
+        return <p>成功创建空工作流 "{name}"，文件：{fileName}</p>
+      } catch (error: any) {
+        console.error('创建工作流失败:', error)
+        return <p>创建工作流失败：{error.message}</p>
+      }
     })
 }

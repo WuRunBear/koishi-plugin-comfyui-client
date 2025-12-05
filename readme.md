@@ -14,7 +14,7 @@
 
 - **高度可定制**: 支持通过 JSON 加载任意 ComfyUI 工作流。
 - **文生图指令**: 提供 `comfy`、`cf` 指令，方便用户生成图片，引用图片时会自动上传。
-- **工作流管理指令**: 提供 `comfyls`、`cfls` 查看工作流；`comfyls.init`、`cfls.init` 初始化默认工作流文件。
+- **工作流管理指令**: 提供 `comfyls`、`cfls` 查看工作流；`comfyls.init`、`cfls.init` 初始化默认工作流文件；`cfls.new` 创建新工作流并更新索引。
 - **动态连接**: 自动处理与 ComfyUI 服务器的 WebSocket 连接和 HTTP 请求。
 
 ## 💿 安装
@@ -138,6 +138,7 @@
    ```
    - `outputNodeIDArr` 填写步骤1中记下的所有 `SaveImage` 节点ID
    - 可通过 `default` 字段指定默认使用的工作流
+   - 也可运行 `cfls.new` 交互式创建新工作流并自动写入索引
 
 ## 3. 插件配置
 
@@ -172,6 +173,18 @@ comfyls.init
 
 ```
 comfyls
+```
+
+创建新工作流：
+
+```
+comfyls.new --desc [工作流描述] --out [输出节点，逗号隔开] <name> [content] 
+```
+
+or
+
+```
+comfyls.new --desc [工作流描述] <name>
 ```
 
 **示例:**
