@@ -265,7 +265,7 @@ export class ComfyUINode {
             // 获取执行历史和结果
             const historyResult = await this.getHistory(promptId);
             if (!historyResult.success) {
-              reject(new Error('Failed to get execution history'));
+              reject(new Error(historyResult.error || 'Failed to get execution history'));
               return;
             }
 

@@ -49,10 +49,14 @@ export function registerComfyCommand(ctx: Context) {
         if (img.src) {
           const arraybuffer = await ctx.http.get(img.src, { responseType: 'arraybuffer' })
           const uploadResult = await comfyNode.uploadImage(new Blob([arraybuffer]), img.filename, ctx.config.comfyuiSubfolder)
+
           if (!uploadResult.success) {
+            console.log('图片上传失败:', uploadResult)
             return `图片上传失败 ${uploadResult.error}`
           }
-          promptParams.image = `${uploadResult.data?.subfolder}/${uploadResult.data?.filename || promptParams.image}`
+          promptParams.image = `${uploadResult.data?.subfolder}/${
+            (uploadResult.data?.name || uploadResult.data?.filename) || promptParams.image
+          }`
         } else {
           const inputList = await comfyNode.getInputList()
           promptParams.image = inputList.data[0]
