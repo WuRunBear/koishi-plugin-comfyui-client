@@ -3,8 +3,7 @@ export function sanitizeUserPrompt(input: string) {
   return input
     .replaceAll('\n', ' ')
     .replaceAll('"', '\\\"')
-    .replaceAll('(', '\\\(')
-    .replaceAll(')', '\\\)')
+    .replace(/\\/g, '\\\\')
 }
 
 export function applyPlaceholders(template: string, values: Record<string, string | number>) {
