@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-comfyui-workflow",
   "description": "一个Koishi适用的ComfyUI客户端插件，支持多工作流",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
