@@ -24,49 +24,65 @@ export function registerComfyCommand(ctx: Context) {
         userPrompt = userPrompt.replaceAll(h.unescape(message.quote.content), ' ')
       }
 
-      const img = { src: '', filename: '' }
+      // 支持多图：构建 images 列表
+      const images: { src: string; filename: string }[] = []
       if (imgQu.length) {
-        img.src = imgQu[0].attrs.src
-        img.filename = `${Date.now()}_${imgQu[0].attrs.file}`
+        for (let i = 0; i < imgQu.length; i++) {
+          const attrs = imgQu[i]?.attrs || {}
+          const src = attrs.src || ''
+          const file = attrs.file || `image${i + 1}.png`
+          if (src) {
+            images.push({
+              src,
+              filename: `${Date.now()}_${file}`,
+            })
+          }
+        }
       }
 
       const targetWorkflow = _.options.workflow || ctx.config.defaultWorkflow
-      const { width, height, sampler, scheduler, seed } = _.options
 
       try {
         const { json: promptJson, outputNodeIDArr } = loadWorkflow(ctx, targetWorkflow)
         const finalUserPrompt = sanitizeUserPrompt(userPrompt)
         const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION)
 
-        const promptParams = {
+        // 构建占位符参数（动态 image1、image2…）
+        const promptParams: Record<string, any> = {
           prompt: finalUserPrompt,
-          width,
-          height,
-          sampler,
-          scheduler,
-          image: img.filename,
+          ..._.options,
         }
-        if (img.src) {
-          const arraybuffer = await ctx.http.get(img.src, { responseType: 'arraybuffer' })
-          const uploadResult = await comfyNode.uploadImage(new Blob([arraybuffer]), img.filename, ctx.config.comfyuiSubfolder)
 
-          if (!uploadResult.success) {
-            console.log('图片上传失败:', uploadResult)
-            return `图片上传失败 ${uploadResult.error}`
+        if (images.length > 0) {
+          for (let i = 0; i < images.length; i++) {
+            const image = images[i]
+            const arraybuffer = await ctx.http.get(image.src, { responseType: 'arraybuffer' })
+            const uploadResult = await comfyNode.uploadImage(new Blob([arraybuffer]), image.filename, ctx.config.comfyuiSubfolder)
+
+            if (!uploadResult.success) {
+              console.log('图片上传失败:', uploadResult)
+              return `图片上传失败 ${uploadResult.error}`
+            }
+            const uploadedName = (uploadResult.data?.name || uploadResult.data?.filename) || image.filename
+            const uploadedPath = uploadResult.data?.subfolder ? `${uploadResult.data.subfolder}/${uploadedName}` : uploadedName
+            promptParams[`image${i + 1}`] = uploadedPath
           }
-          promptParams.image = `${uploadResult.data?.subfolder}/${
-            (uploadResult.data?.name || uploadResult.data?.filename) || promptParams.image
-          }`
+          // 兼容旧工作流：如果存在 image1，也填充 image
+          if (promptParams['image1']) {
+            promptParams['image'] = promptParams['image1']
+          }
         } else {
           const inputList = await comfyNode.getInputList()
-          promptParams.image = inputList.data[0]
+          // 默认取第一个输入作为 image1，同时兼容旧的 image 键
+          promptParams['image1'] = inputList.data[0]
+          promptParams['image'] = promptParams['image1']
         }
 
         let _promptJson = JSON.parse(
           applyPlaceholders(promptJson, promptParams),
         )
 
-        _promptJson = comfyNode.updateSeed(_promptJson, seed)
+        _promptJson = comfyNode.updateSeed(_promptJson, _.options.seed)
 
         const quote = h('quote', { id: _.session.messageId })
         let workingMessageIds = ['']
