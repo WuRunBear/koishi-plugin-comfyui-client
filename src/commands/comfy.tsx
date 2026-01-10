@@ -96,11 +96,15 @@ export function registerComfyCommand(ctx: Context) {
           outputNodeIDArr.forEach((outputNodeID) => {
             if (result.outputs[outputNodeID]) {
               result.outputs[outputNodeID].images.map((item) => {
-                const base64 = `data:image/png;base64,${item.buffer.toString('base64')}`
-                finalResult.push({ filename: item.filename, buffer: item.buffer, base64, html: <img src={base64} /> })
+                // const base64 = `data:image/png;base64,${item.buffer.toString('base64')}`
+                finalResult.push({ filename: item.filename, buffer: item.buffer, html: h.image(item.buffer, 'image/png') })
+              })
+              result.outputs[outputNodeID].videos.map((item) => {
+                // const base64 = `data:video/mp4;base64,${item.buffer.toString('base64')}`
+                finalResult.push({ filename: item.filename, buffer: item.buffer, html: h.video(item.buffer, 'video/mp4', { controls: true }) })
               })
               result.outputs[outputNodeID].texts.map((item) => {
-                finalResult.push({ text: item.text, html: <p>{item.text}</p> })
+                finalResult.push({ text: item.text, html: h('p', item.text) })
               })
             }
           })

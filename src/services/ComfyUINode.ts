@@ -183,15 +183,15 @@ export class ComfyUINode {
   }
 
   /**
-   * 获取生成的图片
+   * 获取生成的文件
    * @param {string} filename - 文件名
    * @param {string} subfolder - 子文件夹
    * @param {string} type - 类型
-   * @returns {Promise<Buffer>} 图片数据
+   * @returns {Promise<Buffer>} 文件数据
    */
-  async getImage(filename, subfolder = '', type = 'output') {
+  async getFile(filename, subfolder = '', type = 'output') {
     try {
-      const url = `${this.isSecureConnection ? 'https' : 'http'}://${this.serverEndpoint}/view?filename=${filename}&subfolder=${subfolder}&type=${type}`;
+      const url = `${this.isSecureConnection ? 'https' : 'http'}://${this.serverEndpoint}/api/view?filename=${filename}&subfolder=${subfolder}&type=${type}`;
       const response = await this.ctx.http.get(url, { responseType: 'arraybuffer' });
 
       return {
@@ -203,7 +203,7 @@ export class ComfyUINode {
       return {
         success: false,
         error: error.response?.data || error.message,
-        message: 'Failed to get image'
+        message: 'Failed to get file'
       };
     }
   }
@@ -255,66 +255,85 @@ export class ComfyUINode {
           const messageData = message.data;
 
           // 检查是否是我们等待的prompt完成消息
-          if (message.type === 'executing' &&
-            messageData.prompt_id === promptId &&
-            messageData.node === null) {
-
+          if (messageData.prompt_id === promptId) {
             clearTimeout(timeout);
-            this.ws?.off('message', onMessage);
+            if (message.type === 'executing' && messageData.node === null) {
+              this.ws?.off('message', onMessage);
 
-            // 获取执行历史和结果
-            const historyResult = await this.getHistory(promptId);
-            if (!historyResult.success) {
-              reject(new Error(historyResult.error || 'Failed to get execution history'));
-              return;
-            }
+              // 获取执行历史和结果
+              const historyResult = await this.getHistory(promptId);
+              if (!historyResult.success) {
+                reject(new Error(historyResult.error || 'Failed to get execution history'));
+                return;
+              }
 
-            const history = historyResult.data;
-            const outputs = {};
+              const history = historyResult.data;
+              const outputs = {};
 
-            // 处理输出结果
-            for (const nodeId of Object.keys(history.outputs || {})) {
-              const nodeOutput = history.outputs[nodeId];
-              const images = [];
-              const texts = [];
-              if (nodeOutput.images) {
-                for (const imageInfo of nodeOutput.images) {
-                  if (imageInfo.type === 'output') {
-                    const imageResult = await this.getImage(
-                      imageInfo.filename,
-                      imageInfo.subfolder,
-                      imageInfo.type
-                    );
+              // 处理输出结果
+              for (const nodeId of Object.keys(history.outputs || {})) {
+                const nodeOutput = history.outputs[nodeId];
+                const images = [];
+                const videos = [];
+                const texts = [];
+                if (nodeOutput.images) {
+                  // nodeOutput.animated
+                  for (const [key, fileInfo] of Object.entries(nodeOutput.images as any[])) {
+                    if (fileInfo.type === 'output') {
+                      if (nodeOutput.animated?.[key]) {
+                        const videoResult = await this.getFile(
+                          fileInfo.filename,
+                          fileInfo.subfolder,
+                          fileInfo.type
+                        );
 
-                    if (imageResult.success) {
-                      images.push({
-                        filename: imageInfo.filename,
-                        subfolder: imageInfo.subfolder,
-                        type: imageInfo.type,
-                        buffer: imageResult.buffer,
-                        data: imageResult.data
-                      });
+                        if (videoResult.success) {
+                          videos.push({
+                            filename: fileInfo.filename,
+                            subfolder: fileInfo.subfolder,
+                            type: fileInfo.type,
+                            buffer: videoResult.buffer,
+                            data: videoResult.data
+                          });
+                        }
+                      } else {
+                        const imageResult = await this.getFile(
+                          fileInfo.filename,
+                          fileInfo.subfolder,
+                          fileInfo.type
+                        );
+
+                        if (imageResult.success) {
+                          images.push({
+                            filename: fileInfo.filename,
+                            subfolder: fileInfo.subfolder,
+                            type: fileInfo.type,
+                            buffer: imageResult.buffer,
+                            data: imageResult.data
+                          });
+                        }
+                      }
                     }
                   }
                 }
-              }
-              if (nodeOutput.text) {
-                for (const text of nodeOutput.text) {
-                  texts.push({
-                    text
-                  });
+                if (nodeOutput.text) {
+                  for (const text of nodeOutput.text) {
+                    texts.push({
+                      text
+                    });
+                  }
                 }
+                outputs[nodeId] = { images, videos, texts };
               }
-              outputs[nodeId] = { images, texts };
-            }
 
-            resolve({
-              success: true,
-              prompt_id: promptId,
-              outputs,
-              history,
-              message: 'Execution completed successfully'
-            });
+              resolve({
+                success: true,
+                prompt_id: promptId,
+                outputs,
+                history,
+                message: 'Execution completed successfully'
+              });
+            }
           }
         } catch (err) {
           clearTimeout(timeout);
