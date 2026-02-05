@@ -3,6 +3,8 @@ import { loadWorkflow } from '../workflows/loader'
 import { sanitizeUserPrompt, applyPlaceholders } from '../utils/prompt'
 import { ComfyUINode } from '../services/ComfyUINode'
 
+const userImages = new Map<string, { uploadedPath: string }[]>()
+
 export function registerComfyCommand(ctx: Context) {
   const COMFYUI_SERVER = ctx.config.serverEndpoint
   const IS_SECURE_CONNECTION = ctx.config.isSecureConnection
@@ -16,7 +18,65 @@ export function registerComfyCommand(ctx: Context) {
     .option('scheduler', '--sc [scheduler] 调度器', { fallback: 'karras' })
     .option('seed', '--se [seed] 随机种')
     .option('workflow', '--wf <workflow> 指定工作流名称')
+    .option('watch', '--wt 交互式上传图片')
+    .option('clean', '--cl 清除图片缓存')
     .action(async (_, userPrompt) => {
+      // 清除缓存
+      if (_.options.clean) {
+        userImages.delete(_.session.cid)
+        return '图片缓存已清除。'
+      }
+
+      // 交互式上传模式
+      if (_.options.watch) {
+        await _.session.send('进入交互式上传模式。请发送图片，支持多张发送，发送“结束”退出。')
+        userImages.set(_.session.cid, [])
+        const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION)
+
+        while (true) {
+          const content = await _.session.prompt()
+          if (!content) {
+            await _.session.send('输入超时，退出交互模式。')
+            break
+          }
+          if (content === '结束') {
+            await _.session.send(`退出交互模式。共缓存 ${userImages.get(_.session.cid)?.length || 0} 张图片。`)
+            break
+          }
+
+          const elements = h.parse(content)
+          const imgs = h.select(elements, 'img')
+          if (imgs.length === 0) continue
+
+          let count = 0
+          for (const img of imgs) {
+            const src = img.attrs.src
+            if (!src) continue
+            try {
+              const arraybuffer = await ctx.http.get(src, { responseType: 'arraybuffer' })
+              const filename = `${Date.now()}_${count}.png`
+              const uploadResult = await comfyNode.uploadImage(new Blob([arraybuffer]), filename, ctx.config.comfyuiSubfolder)
+              if (uploadResult.success) {
+                const uploadedName = (uploadResult.data?.name || uploadResult.data?.filename) || filename
+                const uploadedPath = uploadResult.data?.subfolder ? `${uploadResult.data.subfolder}/${uploadedName}` : uploadedName
+                
+                const list = userImages.get(_.session.cid) || []
+                list.push({ uploadedPath })
+                userImages.set(_.session.cid, list)
+                count++
+              }
+            } catch (err) {
+              await _.session.send(`上传失败: ${err.message}`)
+            }
+          }
+          if (count > 0) {
+            const total = userImages.get(_.session.cid)?.length || 0
+            await _.session.send(`成功接收 ${count} 张图片，当前共缓存 ${total} 张。`)
+          }
+        }
+        return
+      }
+
       let message = _.session.event.message
       let imgQu: any[] = []
       if (message.quote) {
@@ -53,6 +113,16 @@ export function registerComfyCommand(ctx: Context) {
           ..._.options,
         }
 
+        let imageIndex = 1
+        const cachedImages = userImages.get(_.session.cid) || []
+
+        // 1. 填充缓存图片
+        for (const img of cachedImages) {
+          promptParams[`image${imageIndex}`] = img.uploadedPath
+          imageIndex++
+        }
+
+        // 2. 上传并填充引用图片
         if (images.length > 0) {
           for (let i = 0; i < images.length; i++) {
             const image = images[i]
@@ -65,15 +135,17 @@ export function registerComfyCommand(ctx: Context) {
             }
             const uploadedName = (uploadResult.data?.name || uploadResult.data?.filename) || image.filename
             const uploadedPath = uploadResult.data?.subfolder ? `${uploadResult.data.subfolder}/${uploadedName}` : uploadedName
-            promptParams[`image${i + 1}`] = uploadedPath
+            promptParams[`image${imageIndex}`] = uploadedPath
+            imageIndex++
           }
-          // 兼容旧工作流：如果存在 image1，也填充 image
-          if (promptParams['image1']) {
-            promptParams['image'] = promptParams['image1']
-          }
+        }
+
+        // 兼容 image (如果 image1 存在)
+        if (promptParams['image1']) {
+          promptParams['image'] = promptParams['image1']
         } else {
+          // 如果没有任何图片 (imageIndex === 1)，使用默认输入
           const inputList = await comfyNode.getInputList()
-          // 默认取第一个输入作为 image1，同时兼容旧的 image 键
           promptParams['image1'] = inputList.data[0]
           promptParams['image'] = promptParams['image1']
         }
