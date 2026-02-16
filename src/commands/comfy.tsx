@@ -5,6 +5,33 @@ import { ComfyUINode } from '../services/ComfyUINode'
 
 const userImages = new Map<string, { uploadedPath: string }[]>()
 
+async function uploadImageFromUrl(
+  ctx: Context,
+  comfyNode: ComfyUINode,
+  src: string,
+  filename: string,
+) {
+  try {
+    const arraybuffer = await ctx.http.get(src, { responseType: 'arraybuffer' })
+    const uploadResult = await comfyNode.uploadImage(
+      new Blob([arraybuffer]),
+      filename,
+      ctx.config.comfyuiSubfolder,
+    )
+    if (!uploadResult.success) {
+      return { success: false, error: uploadResult.error }
+    }
+    const uploadedName =
+      uploadResult.data?.name || uploadResult.data?.filename || filename
+    const uploadedPath = uploadResult.data?.subfolder
+      ? `${uploadResult.data.subfolder}/${uploadedName}`
+      : uploadedName
+    return { success: true, uploadedPath }
+  } catch (error) {
+    return { success: false, error }
+  }
+}
+
 export function registerComfyCommand(ctx: Context) {
   const COMFYUI_SERVER = ctx.config.serverEndpoint
   const IS_SECURE_CONNECTION = ctx.config.isSecureConnection
@@ -27,8 +54,59 @@ export function registerComfyCommand(ctx: Context) {
         return '图片缓存已清除。'
       }
 
+      const message = _.session.event.message
+      let imgQu: any[] = []
+      if (message.quote) {
+        imgQu = h.select(message.quote.elements, 'img')
+      }
+
       // 交互式上传模式
       if (_.options.watch) {
+        if (imgQu.length > 0) {
+          const comfyNode = new ComfyUINode(
+            ctx,
+            COMFYUI_SERVER,
+            IS_SECURE_CONNECTION,
+          )
+          let count = 0
+          const list: { uploadedPath: string }[] = []
+
+          for (let i = 0; i < imgQu.length; i++) {
+            const attrs = imgQu[i]?.attrs || {}
+            const src = attrs.src || ''
+            const file = attrs.file || `image${i + 1}.png`
+            if (!src) continue
+            const filename = `${Date.now()}_${file}`
+            const result = await uploadImageFromUrl(
+              ctx,
+              comfyNode,
+              src,
+              filename,
+            )
+            if (result.success && result.uploadedPath) {
+              list.push({ uploadedPath: result.uploadedPath })
+              count++
+            } else if (result.error) {
+              await _.session.send(
+                `上传失败: ${
+                  (result.error as any).message || String(result.error)
+                }`,
+              )
+            }
+          }
+
+          userImages.set(_.session.cid, list)
+          if (count > 0) {
+            const total = list.length
+            await _.session.send(
+              `成功接收 ${count} 张引用图片，当前共缓存 ${total} 张。`,
+            )
+          } else {
+            await _.session.send('未检测到有效的引用图片。')
+          }
+          return
+        }
+
         await _.session.send('进入交互式上传模式。请发送图片，支持多张发送，发送“结束”退出。')
         userImages.set(_.session.cid, [])
         const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION)
@@ -52,21 +130,24 @@ export function registerComfyCommand(ctx: Context) {
           for (const img of imgs) {
             const src = img.attrs.src
             if (!src) continue
-            try {
-              const arraybuffer = await ctx.http.get(src, { responseType: 'arraybuffer' })
-              const filename = `${Date.now()}_${count}.png`
-              const uploadResult = await comfyNode.uploadImage(new Blob([arraybuffer]), filename, ctx.config.comfyuiSubfolder)
-              if (uploadResult.success) {
-                const uploadedName = (uploadResult.data?.name || uploadResult.data?.filename) || filename
-                const uploadedPath = uploadResult.data?.subfolder ? `${uploadResult.data.subfolder}/${uploadedName}` : uploadedName
-                
-                const list = userImages.get(_.session.cid) || []
-                list.push({ uploadedPath })
-                userImages.set(_.session.cid, list)
-                count++
-              }
-            } catch (err) {
-              await _.session.send(`上传失败: ${err.message}`)
+            const filename = `${Date.now()}_${count}.png`
+            const result = await uploadImageFromUrl(
+              ctx,
+              comfyNode,
+              src,
+              filename,
+            )
+            if (result.success && result.uploadedPath) {
+              const list = userImages.get(_.session.cid) || []
+              list.push({ uploadedPath: result.uploadedPath })
+              userImages.set(_.session.cid, list)
+              count++
+            } else if (result.error) {
+              await _.session.send(
+                `上传失败: ${
+                  (result.error as any).message || String(result.error)
+                }`,
+              )
             }
           }
           if (count > 0) {
@@ -77,10 +158,7 @@ export function registerComfyCommand(ctx: Context) {
         return
       }
 
-      let message = _.session.event.message
-      let imgQu: any[] = []
-      if (message.quote) {
-        imgQu = h.select(message.quote.elements, 'img')
+      if (message.quote && userPrompt) {
         userPrompt = userPrompt.replaceAll(h.unescape(message.quote.content), ' ')
       }
 
@@ -126,16 +204,19 @@ export function registerComfyCommand(ctx: Context) {
         if (images.length > 0) {
           for (let i = 0; i < images.length; i++) {
             const image = images[i]
-            const arraybuffer = await ctx.http.get(image.src, { responseType: 'arraybuffer' })
-            const uploadResult = await comfyNode.uploadImage(new Blob([arraybuffer]), image.filename, ctx.config.comfyuiSubfolder)
-
-            if (!uploadResult.success) {
-              console.log('图片上传失败:', uploadResult)
-              return `图片上传失败 ${uploadResult.error}`
+            const result = await uploadImageFromUrl(
+              ctx,
+              comfyNode,
+              image.src,
+              image.filename,
+            )
+            if (!result.success || !result.uploadedPath) {
+              console.log('图片上传失败:', result.error)
+              return `图片上传失败 ${
+                (result.error as any)?.message || String(result.error)
+              }`
             }
-            const uploadedName = (uploadResult.data?.name || uploadResult.data?.filename) || image.filename
-            const uploadedPath = uploadResult.data?.subfolder ? `${uploadResult.data.subfolder}/${uploadedName}` : uploadedName
-            promptParams[`image${imageIndex}`] = uploadedPath
+            promptParams[`image${imageIndex}`] = result.uploadedPath
             imageIndex++
           }
         }
