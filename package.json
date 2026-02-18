@@ -4,9 +4,11 @@
   "version": "0.2.8",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "files": [
-    "lib",
-    "dist"
+    "lib"
   ],
   "license": "MIT",
   "keywords": [
