@@ -13,7 +13,8 @@
     "chatbot",
     "koishi",
     "plugin",
-    "comfyui"
+    "comfyui",
+    "ai"
   ],
   "contributors": [
     "WuRunBear"
