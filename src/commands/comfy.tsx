@@ -2,6 +2,7 @@ import { Context, h } from 'koishi'
 import { loadWorkflow } from '../workflows/loader'
 import { sanitizeUserPrompt, applyPlaceholders } from '../utils/prompt'
 import { ComfyUINode } from '../services/ComfyUINode'
+import { getSharedComfyUINode } from '../services/sharedComfyNode'
 
 const userImages = new Map<string, { uploadedPath: string }[]>()
 
@@ -33,9 +34,6 @@ async function uploadImageFromUrl(
 }
 
 export function registerComfyCommand(ctx: Context) {
-  const COMFYUI_SERVER = ctx.config.serverEndpoint
-  const IS_SECURE_CONNECTION = ctx.config.isSecureConnection
-
   ctx
     .command('comfy [userPrompt:text] ComfyUI绘图')
     .alias('cf')
@@ -63,11 +61,7 @@ export function registerComfyCommand(ctx: Context) {
       // 交互式上传模式
       if (_.options.watch) {
         if (imgQu.length > 0) {
-          const comfyNode = new ComfyUINode(
-            ctx,
-            COMFYUI_SERVER,
-            IS_SECURE_CONNECTION,
-          )
+          const comfyNode = getSharedComfyUINode(ctx)
           let count = 0
           const list: { uploadedPath: string }[] = []
 
@@ -109,7 +103,7 @@ export function registerComfyCommand(ctx: Context) {
 
         await _.session.send('进入交互式上传模式。请发送图片，支持多张发送，发送“结束”退出。')
         userImages.set(_.session.cid, [])
-        const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION)
+        const comfyNode = getSharedComfyUINode(ctx)
 
         while (true) {
           const content = await _.session.prompt()
@@ -183,7 +177,7 @@ export function registerComfyCommand(ctx: Context) {
       try {
         const { json: promptJson, outputNodeIDArr } = loadWorkflow(ctx, targetWorkflow)
         const finalUserPrompt = sanitizeUserPrompt(userPrompt)
-        const comfyNode = new ComfyUINode(ctx, COMFYUI_SERVER, IS_SECURE_CONNECTION)
+        const comfyNode = getSharedComfyUINode(ctx)
 
         // 构建占位符参数（动态 image1、image2…）
         const promptParams: Record<string, any> = {

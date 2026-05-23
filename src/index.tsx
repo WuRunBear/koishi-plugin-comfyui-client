@@ -2,6 +2,7 @@ import { Context, Schema } from 'koishi'
 import { ensureWorkflowFiles } from './workflows/loader'
 import { registerComfyCommand } from './commands/comfy'
 import { registerWorkflowListCommand } from './commands/workflowList'
+import { shutdownSharedComfyUINode } from './services/sharedComfyNode'
 
 export const name = 'comfyui-client'
 
@@ -23,4 +24,7 @@ export async function apply(ctx: Context) {
   await ensureWorkflowFiles(ctx)
   registerComfyCommand(ctx)
   registerWorkflowListCommand(ctx)
+  ctx.on('dispose', async () => {
+    await shutdownSharedComfyUINode()
+  })
 }

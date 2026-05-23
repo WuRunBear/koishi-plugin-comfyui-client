@@ -1,239 +1,246 @@
 基于flymyd/koishi-plugin-comfyui-client二次开发的插件
 
-- 去掉llm增强提示词的功能，我觉得这个功能可以在工作流中实现
-- 新增多工作流功能
+以下内容由ai生成
 
 # koishi-plugin-comfyui-workflow
 
 [![npm](https://img.shields.io/npm/v/koishi-plugin-comfyui-workflow?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-comfyui-workflow)
 [![GitHub](https://img.shields.io/github/stars/WuRunBear/koishi-plugin-comfyui-client?style=flat-square)](https://github.com/WuRunBear/koishi-plugin-comfyui-client)
 
-一个为 [Koishi](https://koishi.chat/) 设计的 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 客户端插件。它允许你通过 Koishi 机器人执行任何 ComfyUI 工作流，实现文生图等功能。
+一个为 [Koishi](https://koishi.chat/) 设计的 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 客户端插件：通过聊天指令执行任意 ComfyUI 工作流，并将图片/视频/文本结果返回到聊天平台。
 
 ## ✨ 功能特性
 
-- **高度可定制**: 支持通过 JSON 加载任意 ComfyUI 工作流。
-- **文生图指令**: 提供 `comfy`、`cf` 指令，方便用户生成图片，引用图片时会自动上传。
-- **工作流管理指令**: 提供 `comfyls`、`cfls` 查看工作流；`comfyls.init`、`cfls.init` 初始化默认工作流文件；`cfls.new` 创建新工作流并更新索引。
-- **动态连接**: 自动处理与 ComfyUI 服务器的 WebSocket 连接和 HTTP 请求。
-- **多图片上传**: 通过引用消息上传多张图片，引用的消息有几张就上传几张；按 `image1`、`image2` 顺序映射，在工作流中通过 `{{image1}}`、`{{image2}}` 使用。
-- **动态参数名**: 任意以 `--` 传入的参数都会在工作流中以同名模板 `{{参数名}}` 可用（例如 `cf --aa 11` 则可在工作流中使用 `{{aa}}=11`），无需在指令的 `option` 中预先定义。
-- **交互式上传**: 提供 `cf --wt` 进入交互式上传模式，支持连续发送多张图片并自动缓存。
-- **缓存管理**: 提供 `cf --cl` 清除当前用户的图片缓存。
+- 支持多工作流：在 Koishi 数据目录维护 `index.json`，按名称选择不同工作流模板
+- 文/图生图：`comfy` / `cf` 指令，支持引用图片自动上传
+- 多图输入：引用的多张图片会依次映射为 `{{image1}}`、`{{image2}}`……
+- 交互式上传：`cf --wt` 连续缓存多张图片，后续指令自动使用缓存
+- 缓存管理：`cf --cl` 清除当前会话的图片缓存
+- 自动通信：内部处理 HTTP 请求与 WebSocket 监听，提交任务并等待执行结束
+
+## ✅ 运行前提
+
+- 已启动 ComfyUI，确保以下地址在 Koishi 运行环境可访问：
+  - HTTP：`http(s)://<serverEndpoint>/`
+  - WebSocket：`ws(s)://<serverEndpoint>/ws`
+- 如果 ComfyUI 与 Koishi 不在同一台机器，注意防火墙与端口映射（默认 8188）
 
 ## 💿 安装
 
-在 Koishi 插件市场搜索 `comfyui-workflow` 并安装。
+- 市场安装：Koishi 插件市场搜索 `comfyui-workflow` 并安装
+- 手动安装（可选）：
+
+```bash
+pnpm add koishi-plugin-comfyui-workflow
+```
 
 ## ⚙️ 配置项
 
-在 Koishi 的插件配置页面填入以下选项：
+在 Koishi 的插件配置页面填写：
 
-|配置项|类型|默认值|描述|
-|--|--|--|--|
-|`serverEndpoint`|`string`|`127.0.0.1:8188`|ComfyUI 服务器地址，格式为 `域名/IP:端口`。|
-|`isSecureConnection`|`boolean`|`false`|是否使用 `https` 和 `wss` 进行安全连接。|
-|`defaultWorkflow`|`string`|`default`|默认工作流名称|
-|`comfyuiSubfolder`|`string`|`temp`|上传引用图像的子文件夹（ComfyUI 输入目录）。|
+| 配置项                  | 类型        | 默认值              | 描述                              |
+| -------------------- | --------- | ---------------- | ------------------------------- |
+| `serverEndpoint`     | `string`  | `127.0.0.1:8188` | ComfyUI 服务器地址，格式：`域名/IP:端口`     |
+| `isSecureConnection` | `boolean` | `false`          | 是否使用 `https` 与 `wss`            |
+| `defaultWorkflow`    | `string`  | `default`        | 默认工作流名称（对应 `index.json` 里的键名）   |
+| `comfyuiSubfolder`   | `string`  | `temp`           | 上传图片的子目录（ComfyUI input 下的子文件夹名） |
 
----
+说明：
 
-# 如何配置和管理工作流
+- 工作流文件会落在 Koishi 数据目录：`data/koishi-plugin-comfyui-client/workflows/`
+  - 这里的目录名沿用了历史命名（不是包名），属于正常现象
 
-二次开发后，插件支持多工作流管理，你需要按照以下步骤准备和配置工作流：
+## 🚀 快速开始
 
-## 1. 准备工作流文件
-
-1. **在 ComfyUI 中构建工作流**
-   - 确保工作流包含接收正面提示词的处理节点（例如 `CLIPTextEncode` 或字符串处理节点）
-   - 将提示词输入框内容设置为 `{{prompt}}` 占位符（插件会自动替换为用户输入）
-   - 可根据需要添加 `{{width}}`、`{{height}}`、`{{sampler}}`、`{{scheduler}}`、`{{image}}`、`{{image1}}`、`{{image2}}` 等占位符；也支持任意 `{{参数名}}`，通过命令行 `--参数名 值` 传入；多图片占位符来源于引用的消息图片顺序；仅引用一张图片时，`{{image}}` 等价于 `{{image1}}`
-   ```json
-      "11": {
-         "inputs": {
-            "image": "{{image}}"
-         },
-         "class_type": "LoadImage",
-         "_meta": {
-            "title": "加载图像"
-         }
-      },
-      "27": {
-         "inputs": {
-            "text": "{{prompt}}",
-            "clip": [
-            "4",
-            1
-            ]
-         },
-         "class_type": "CLIPTextEncode",
-         "_meta": {
-            "title": "CLIP文本编码器"
-         }
-      },
-      "29": {
-         "inputs": {
-            "width": "{{width}}",
-            "height": "{{height}}",
-            "batch_size": 1
-         },
-         "class_type": "EmptyLatentImage",
-         "_meta": {
-            "title": "空Latent"
-         }
-      },
-      "3": {
-         "inputs": {
-            "seed": 942500763821827,
-            "steps": 30,
-            "cfg": 4,
-            "sampler_name": "{{sampler}}",
-            "scheduler": "{{scheduler}}",
-            "denoise": 1,
-            "model": [
-            "4",
-            0
-            ],
-            "positive": [
-            "27",
-            0
-            ],
-            "negative": [
-            "28",
-            0
-            ],
-            "latent_image": [
-            "29",
-            0
-            ]
-         },
-         "class_type": "KSampler",
-         "_meta": {
-            "title": "K采样器"
-         }
-      },
-   ```
-   - 记下所有生成图像的 `SaveImage` 节点 ID（在节点标题上可见）
-2. **导出工作流**
-   - 点击 ComfyUI 右侧的 `Save (API Format)` 按钮
-   - 将导出的 JSON 文件保存到本地（建议命名为有意义的名称，如 `anime-style.json`）
-
-## 2. 配置工作流索引
-
-1. **工作流存放位置**
-   - 插件会自动在 Koishi 数据目录创建 `data/koishi-plugin-comfyui-client/workflows` 文件夹，或运行 `comfyls.init` 初始化默认索引与示例工作流
-   - 将导出的工作流 JSON 文件放入该文件夹（或替换示例文件），也可在 Koishi 的资源管理器操作
-2. **编辑索引文件**
-   - 打开 `workflows` 文件夹中的 `index.json` 文件
-   - 按照以下格式添加工作流信息：
-   ```json
-   {
-     "工作流名称": {
-       "file": "工作流文件名.json",
-       "outputNodeIDArr": ["输出节点ID1", "输出节点ID2"],
-       "description": "工作流描述"
-     },
-     "default": {
-       "file": "sample-workflow.json",
-       "outputNodeIDArr": ["71", "72"],
-       "description": "默认文生图工作流"
-     }
-   }
-   ```
-   - `outputNodeIDArr` 填写步骤1中记下的所有 `SaveImage` 节点ID
-   - 可通过 `default` 字段指定默认使用的工作流
-   - 也可运行 `cfls.new` 交互式创建新工作流并自动写入索引
-
-## 3. 插件配置
-
-在 Koishi 插件配置页面，只需设置以下基础参数：
-
-- `serverEndpoint`: ComfyUI 服务器地址（格式：`域名/IP:端口`）
-- `isSecureConnection`: 是否使用 HTTPS/WSS 安全连接
-- `defaultWorkflow`: 默认工作流名称（需与 index.json 中的键名一致）
-- `comfyuiSubfolder`: 上传引用图像的子文件夹（默认 `temp`，对应 ComfyUI 输入目录）
-
-完成以上配置后，即可通过 `comfy` 指令调用指定工作流生成图像；使用 `comfyls` 查看可用工作流，`comfyls.init` 初始化默认工作流文件。
-
-## 🚀 使用方法
-
-配置完成后，你可以通过以下指令使用插件：
-
-```
-comfy <你的提示词>
-```
-
-```
-comfy --wf [工作流名称] <你的提示词>
-```
-
-首次使用建议先初始化工作流文件：
+1. 初始化工作流目录与默认文件：
 
 ```
 comfyls.init
 ```
 
-查看可用工作流：
+1. 查看可用工作流：
 
 ```
 comfyls
 ```
 
-创建新工作流：
+1. 直接执行默认工作流：
 
 ```
-comfyls.new --desc [工作流描述] --out [输出节点，逗号隔开] <name> [content] 
+comfy 一只坐在沙发上的可爱猫猫
 ```
 
-or
+1. 指定工作流执行：
 
 ```
-comfyls.new --desc [工作流描述] <name>
+cf --wf <工作流名称> 赛博朋克城市夜景
 ```
 
-**示例:**
+## 🧩 指令说明
+
+### comfy / cf
 
 ```
-comfy a cute cat sitting on a sofa
+comfy [提示词]
+cf [提示词]
 ```
 
-- 动态参数名示例：
+常用参数：
+
+- `--wf <workflow>`：指定工作流名称（不传则使用 `defaultWorkflow`）
+- `--wi [width]`：图片宽（默认 768）
+- `--he [height]`：图片高（默认 1344）
+- `--sa [sampler]`：采样器（默认 euler\_ancestral）
+- `--sc [scheduler]`：调度器（默认 karras）
+- `--se [seed]`：随机种子（不传则自动随机）
+- `--wt`：进入交互式上传图片模式（见下文）
+- `--cl`：清除当前会话的图片缓存
+
+### comfyls / cfls
 
 ```
-cf --aa 11 a cute cat
+comfyls
 ```
 
-工作流内可使用 `{{aa}}`，其值为 `11`（无需在指令中定义 `option`）。
+列出当前 `index.json` 中配置的工作流名称与描述。
 
-- 多图片示例：
-引用一条包含两张图片的消息，然后发送指令：
+### comfyls.init / cfls.init
 
 ```
-cf --wf default a cute cat
+comfyls.init
 ```
 
-工作流内使用 `{{image1}}`、`{{image2}}` 对应两张附件图片的输入（按接收顺序映射）。
+初始化 `data/koishi-plugin-comfyui-client/workflows/`，并写入默认 `index.json` 与示例工作流。
 
-- 交互式上传示例：
+### comfyls.new / cfls.new
 
-发送指令进入交互模式：
+```
+comfyls.new --desc <描述> --out <节点ID1,节点ID2> <name> [content]
+```
+
+- `<name>`：工作流名称（会创建同名 `<name>.json` 并写入索引）
+- `--out`：输出节点 ID，逗号分隔（可选；也可以后续手动编辑 `index.json`）
+- `[content]`：可选，传入 JSON 字符串作为初始内容；不传则创建空对象 `{}`（方便占位）
+
+## 🗂️ 工作流管理
+
+### 1) 放置工作流文件
+
+1. 在 ComfyUI 中搭建工作流
+2. 右侧点击 `Save (API Format)` 导出 JSON
+3. 将导出的文件放到 Koishi 数据目录：
+   - `data/koishi-plugin-comfyui-client/workflows/`
+
+### 2) 配置 index.json
+
+`index.json` 结构示例：
+
+```json
+{
+  "default": {
+    "file": "sample-workflow.json",
+    "outputNodeIDArr": ["71", "72"],
+    "description": "默认文生图工作流"
+  },
+  "anime": {
+    "file": "anime-style.json",
+    "outputNodeIDArr": ["15"],
+    "description": "二次元风格"
+  }
+}
+```
+
+- `file`：工作流文件名（相对 `workflows/` 目录）
+- `outputNodeIDArr`：要返回结果的节点 ID 列表
+  - 图片：通常填写 `SaveImage` 节点 ID
+  - 视频/动图：通常填写 `SaveAnimated*` 等产生 animated 输出的节点 ID
+  - 文本：填写会在 outputs 中产生 `text` 字段的节点 ID
+- `description`：展示用描述
+
+## 🧷 占位符与参数
+
+插件会把工作流文件当作“文本模板”，把 `{{...}}` 替换后再提交给 ComfyUI。
+
+### 常用占位符
+
+- `{{prompt}}`：用户输入的提示词
+- `{{width}}` / `{{height}}`：由 `--wi/--he` 提供
+- `{{sampler}}` / `{{scheduler}}`：由 `--sa/--sc` 提供
+- `{{seed}}`：由 `--se` 提供（不传则自动随机）
+- `{{image1}}`、`{{image2}}`……：多图输入（缓存图 + 引用图，会按顺序拼接）
+- `{{image}}`：兼容别名
+  - 若存在 `image1`，则 `image` 等价于 `image1`
+  - 若完全没有任何图片输入，插件会从 ComfyUI input 列表中取一个默认文件填入（避免工作流缺图报错）
+
+### 自定义占位符（高级）
+
+插件会把命令解析到的参数合并进模板替换，你可以尝试直接传入额外参数：
+
+```
+cf --cfg 6 --steps 30 一只可爱猫猫
+```
+
+然后在工作流中使用 `{{cfg}}`、`{{steps}}`。
+
+注意：
+
+- 不同 Koishi 版本/配置对“未声明参数”的处理可能存在差异；如果发现参数没有生效，建议把它改成工作流内固定值，或在插件侧增加显式参数支持
+- 如果 ComfyUI 节点对类型要求严格（例如必须是数字），但你用字符串占位导致类型不匹配：
+  - 优先尝试让 ComfyUI 节点接受字符串（不少节点会自动转换）
+  - 不行再把占位符改成不加引号的形式（此时工作流文件可能不再是合法 JSON，但作为模板可以工作）
+
+## 🖼️ 多图输入与交互式上传
+
+### 引用消息上传（一次性）
+
+引用一条包含多张图片的消息，然后发送绘图指令；引用的图片会依次映射：
+
+```
+cf --wf default 生成同风格角色
+```
+
+工作流中用 `{{image1}}`、`{{image2}}`……取对应图片。
+
+### 交互式上传（可缓存）
+
+1. 进入交互模式：
 
 ```
 cf --wt
 ```
 
-然后发送多张图片，发送“结束”退出。
-之后发送绘图指令（图片将按顺序自动映射到 `{{image1}}`, `{{image2}}`...）：
+1. 连续发送多张图片（可一次多张）
+2. 发送“结束”退出
+3. 再发送绘图指令：
 
 ```
-cf a girl
+cf 一位少女，半身像
 ```
 
-- 清除缓存示例：
+### 清除缓存
 
 ```
 cf --cl
 ```
+
+## 🧰 常见问题
+
+### 连接失败 / 无法拉取结果
+
+- 检查 `serverEndpoint` 是否能从 Koishi 机器访问（远程 ComfyUI 时最常见）
+- `isSecureConnection=true` 时，对应 ComfyUI 必须能通过 `https/wss` 访问
+
+### 图片上传失败
+
+- 检查 ComfyUI 是否启用了上传接口
+- 检查 `comfyuiSubfolder` 对应的 input 子目录是否可写
+
+## ℹ️ 关于本仓库
+
+本项目基于 `flymyd/koishi-plugin-comfyui-client` 二次开发：
+
+- 去掉了 LLM 增强提示词相关功能（更推荐在工作流侧实现）
+- 新增多工作流管理能力
 
 ## 📄 许可协议
 

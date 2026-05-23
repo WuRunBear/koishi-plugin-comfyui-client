@@ -9,12 +9,29 @@ export class ComfyUINode {
   clientId: any;
   ws: any;
   ctx: any;
+  private connectPromise: Promise<void> | null;
+  private reconnectTimer: any;
+  private reconnectAttempt: number;
+  private maxReconnectAttempt: number;
+  private suspendReconnect: boolean;
+  private lastConnectError: any;
+  private pendingCompletions: Map<
+    string,
+    { resolve: (value: any) => void; reject: (reason?: any) => void; timeout: any }
+  >;
   constructor(ctx: any, serverEndpoint: any, isSecureConnection: boolean = false, clientId: any = null) {
     this.ctx = ctx;
     this.serverEndpoint = serverEndpoint;
     this.isSecureConnection = isSecureConnection;
     this.clientId = clientId || uuidv4();
     this.ws = null;
+    this.connectPromise = null;
+    this.reconnectTimer = null;
+    this.reconnectAttempt = 0;
+    this.maxReconnectAttempt = 5;
+    this.suspendReconnect = false;
+    this.lastConnectError = null;
+    this.pendingCompletions = new Map();
   }
   /**
    * 用户上传图片，返回服务器的响应值
@@ -52,39 +69,222 @@ export class ComfyUINode {
    * @returns {Promise<void>}
    */
   async connect() {
-    return new Promise<void>((resolve, reject) => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        resolve();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+
+    if (this.connectPromise) {
+      await this.connectPromise;
+      return;
+    }
+
+    if (this.suspendReconnect) {
+      this.suspendReconnect = false;
+      this.reconnectAttempt = 0;
+      this.lastConnectError = null;
+    }
+
+    this.connectPromise = this._connectWithRetry();
+    try {
+      await this.connectPromise;
+    } finally {
+      this.connectPromise = null;
+    }
+  }
+
+  private async _connectWithRetry() {
+    let delay = 500;
+    for (let i = 0; i <= this.maxReconnectAttempt; i++) {
+      try {
+        await this._connectOnce();
+        this.reconnectAttempt = 0;
+        this.lastConnectError = null;
         return;
+      } catch (err: any) {
+        this.lastConnectError = err;
+        if (i >= this.maxReconnectAttempt) {
+          this.suspendReconnect = true;
+          throw new Error(`WebSocket连接失败: ${err?.message || String(err)}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * 2, 5000);
       }
+    }
+  }
+
+  private _connectOnce() {
+    return new Promise<void>((resolve, reject) => {
       const url = `${this.isSecureConnection ? 'wss' : 'ws'}://${this.serverEndpoint}/ws?clientId=${this.clientId}`;
-      this.ws = new WebSocket(url, {
-        perMessageDeflate: false,
-      });
+      const ws = new WebSocket(url, { perMessageDeflate: false });
 
-      this.ws.on('open', () => {
+      let settled = false;
+
+      const cleanup = () => {
+        ws.off('open', onOpen);
+        ws.off('close', onClose);
+        ws.off('error', onError);
+      };
+
+      const onOpen = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+
+        this.ws = ws;
+        this._bindWebSocket(ws);
         resolve();
-      });
+      };
 
-      this.ws.on('close', () => {
-        this.ws = null;
-      });
+      const onClose = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error('WebSocket closed'));
+      };
 
-      this.ws.on('error', (err) => {
+      const onError = (err) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
         reject(err);
-      });
+      };
 
-      this.ws.on('message', (data, isBinary) => {
-        if (!isBinary) {
-          try {
-            const message = JSON.parse(data.toString());
-            this._handleWebSocketMessage(message);
-          } catch (err) {
-            console.error('Failed to parse WebSocket message:', err);
+      ws.on('open', onOpen);
+      ws.on('close', onClose);
+      ws.on('error', onError);
+    });
+  }
+
+  private _bindWebSocket(ws) {
+    ws.on('close', () => {
+      this.ws = null;
+      this._scheduleReconnect();
+    });
+
+    ws.on('error', (err) => {
+      this.lastConnectError = err;
+    });
+
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) return;
+      try {
+        const message = JSON.parse(data.toString());
+        this._handleWebSocketMessage(message);
+        this._handleCompletionMessage(message);
+      } catch (err) {
+        console.error('Failed to parse WebSocket message:', err);
+      }
+    });
+  }
+
+  private _scheduleReconnect() {
+    if (this.suspendReconnect) return;
+    if (this.reconnectTimer) return;
+    if (this.reconnectAttempt >= this.maxReconnectAttempt) {
+      this.suspendReconnect = true;
+      return;
+    }
+
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempt), 10000);
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      this.reconnectAttempt++;
+      try {
+        await this.connect();
+      } catch {
+      }
+    }, delay);
+  }
+
+  private async _buildExecutionResult(promptId: string) {
+    const historyResult = await this.getHistory(promptId);
+    if (!historyResult.success) {
+      throw new Error(historyResult.error || 'Failed to get execution history');
+    }
+
+    const history = historyResult.data;
+    const outputs = {};
+
+    for (const nodeId of Object.keys(history.outputs || {})) {
+      const nodeOutput = history.outputs[nodeId];
+      const images = [];
+      const videos = [];
+      const texts = [];
+      if (nodeOutput.images) {
+        for (const [key, fileInfo] of Object.entries(nodeOutput.images as any[])) {
+          if (fileInfo.type === 'output') {
+            if (nodeOutput.animated?.[key]) {
+              const videoResult = await this.getFile(
+                fileInfo.filename,
+                fileInfo.subfolder,
+                fileInfo.type
+              );
+
+              if (videoResult.success) {
+                videos.push({
+                  filename: fileInfo.filename,
+                  subfolder: fileInfo.subfolder,
+                  type: fileInfo.type,
+                  buffer: videoResult.buffer,
+                  data: videoResult.data
+                });
+              }
+            } else {
+              const imageResult = await this.getFile(
+                fileInfo.filename,
+                fileInfo.subfolder,
+                fileInfo.type
+              );
+
+              if (imageResult.success) {
+                images.push({
+                  filename: fileInfo.filename,
+                  subfolder: fileInfo.subfolder,
+                  type: fileInfo.type,
+                  buffer: imageResult.buffer,
+                  data: imageResult.data
+                });
+              }
+            }
           }
         }
-      });
-    });
+      }
+      if (nodeOutput.text) {
+        for (const text of nodeOutput.text) {
+          texts.push({ text });
+        }
+      }
+      outputs[nodeId] = { images, videos, texts };
+    }
+
+    return {
+      success: true,
+      prompt_id: promptId,
+      outputs,
+      history,
+      message: 'Execution completed successfully'
+    };
+  }
+
+  private _handleCompletionMessage(message) {
+    const messageData = message?.data;
+    if (!messageData?.prompt_id) return;
+
+    if (message.type === 'executing' && messageData.node === null) {
+      const promptId = messageData.prompt_id;
+      const pending = this.pendingCompletions.get(promptId);
+      if (!pending) return;
+
+      clearTimeout(pending.timeout);
+      this.pendingCompletions.delete(promptId);
+
+      this._buildExecutionResult(promptId)
+        .then(pending.resolve)
+        .catch(pending.reject);
+    }
   }
 
   /**
@@ -123,6 +323,15 @@ export class ComfyUINode {
       this.ws.close();
       this.ws = null;
     }
+  }
+
+  async shutdown() {
+    this.suspendReconnect = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    await this.disconnect();
   }
 
   /**
@@ -236,113 +445,13 @@ export class ComfyUINode {
    * @returns {Promise<Object>} 执行结果
    */
   async waitForCompletion(promptId) {
+    await this.connect();
     return new Promise((resolve, reject) => {
-      if (!this.ws) {
-        reject(new Error('WebSocket not connected'));
-        return;
-      }
-
       const timeout = setTimeout(() => {
-        this.ws?.off('message', onMessage);
+        this.pendingCompletions.delete(promptId);
         reject(new Error('Execution timeout'));
-      }, 300000); // 5分钟超时
-
-      const onMessage = async (data, isBinary) => {
-        if (isBinary) return;
-
-        try {
-          const message = JSON.parse(data.toString());
-          const messageData = message.data;
-
-          // 检查是否是我们等待的prompt完成消息
-          if (messageData.prompt_id === promptId) {
-            clearTimeout(timeout);
-            if (message.type === 'executing' && messageData.node === null) {
-              this.ws?.off('message', onMessage);
-
-              // 获取执行历史和结果
-              const historyResult = await this.getHistory(promptId);
-              if (!historyResult.success) {
-                reject(new Error(historyResult.error || 'Failed to get execution history'));
-                return;
-              }
-
-              const history = historyResult.data;
-              const outputs = {};
-
-              // 处理输出结果
-              for (const nodeId of Object.keys(history.outputs || {})) {
-                const nodeOutput = history.outputs[nodeId];
-                const images = [];
-                const videos = [];
-                const texts = [];
-                if (nodeOutput.images) {
-                  // nodeOutput.animated
-                  for (const [key, fileInfo] of Object.entries(nodeOutput.images as any[])) {
-                    if (fileInfo.type === 'output') {
-                      if (nodeOutput.animated?.[key]) {
-                        const videoResult = await this.getFile(
-                          fileInfo.filename,
-                          fileInfo.subfolder,
-                          fileInfo.type
-                        );
-
-                        if (videoResult.success) {
-                          videos.push({
-                            filename: fileInfo.filename,
-                            subfolder: fileInfo.subfolder,
-                            type: fileInfo.type,
-                            buffer: videoResult.buffer,
-                            data: videoResult.data
-                          });
-                        }
-                      } else {
-                        const imageResult = await this.getFile(
-                          fileInfo.filename,
-                          fileInfo.subfolder,
-                          fileInfo.type
-                        );
-
-                        if (imageResult.success) {
-                          images.push({
-                            filename: fileInfo.filename,
-                            subfolder: fileInfo.subfolder,
-                            type: fileInfo.type,
-                            buffer: imageResult.buffer,
-                            data: imageResult.data
-                          });
-                        }
-                      }
-                    }
-                  }
-                }
-                if (nodeOutput.text) {
-                  for (const text of nodeOutput.text) {
-                    texts.push({
-                      text
-                    });
-                  }
-                }
-                outputs[nodeId] = { images, videos, texts };
-              }
-
-              resolve({
-                success: true,
-                prompt_id: promptId,
-                outputs,
-                history,
-                message: 'Execution completed successfully'
-              });
-            }
-          }
-        } catch (err) {
-          clearTimeout(timeout);
-          this.ws?.off('message', onMessage);
-          reject(err);
-        }
-      };
-
-      this.ws.on('message', onMessage);
+      }, 300000);
+      this.pendingCompletions.set(promptId, { resolve, reject, timeout });
     });
   }
 
@@ -413,7 +522,6 @@ export class ComfyUINode {
       // 2. 提交prompt到队列
       const queueResult = await this.queuePrompt(newSeedPrompt);
       if (!queueResult.success) {
-        await this.disconnect();
         return queueResult;
       }
 
@@ -423,14 +531,9 @@ export class ComfyUINode {
       const executionResult = await this.waitForCompletion(queueResult.prompt_id);
 
       // 4. 断开连接
-      await this.disconnect();
-
       return executionResult;
 
     } catch (error) {
-      // 确保断开连接
-      await this.disconnect();
-
       return {
         success: false,
         error: {error: {message: error.message},},
