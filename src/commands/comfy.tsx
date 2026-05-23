@@ -2,7 +2,7 @@ import { Context, h } from 'koishi'
 import { loadWorkflow } from '../workflows/loader'
 import { sanitizeUserPrompt, applyPlaceholders } from '../utils/prompt'
 import { ComfyUINode } from '../services/ComfyUINode'
-import { getSharedComfyUINode } from '../services/sharedComfyNode'
+import { getComfyServerKey, getSharedComfyUINode, listComfyServers } from '../services/sharedComfyNode'
 
 const userImages = new Map<string, { uploadedPath: string }[]>()
 
@@ -37,6 +37,7 @@ export function registerComfyCommand(ctx: Context) {
   ctx
     .command('comfy [userPrompt:text] ComfyUI绘图')
     .alias('cf')
+    .option('server', '--sv [server] 选择服务器名称')
     .option('width', '--wi [width] 图片宽', { fallback: 768 })
     .option('height', '--he [height] 图片高', { fallback: 1344 })
     .option('sampler', '--sa [sampler] 采样器', { fallback: 'euler_ancestral' })
@@ -46,9 +47,19 @@ export function registerComfyCommand(ctx: Context) {
     .option('watch', '--wt 交互式上传图片')
     .option('clean', '--cl 清除图片缓存')
     .action(async (_, userPrompt) => {
+      const serverName = _.options.server
+      const servers = listComfyServers(ctx)
+      if (serverName && !servers.some((s) => s.name === serverName)) {
+        const names = servers.map((s) => s.name).join(', ')
+        return `未找到服务器 "${serverName}"，可用服务器：${names || '(空)'}`
+      }
+
+      const serverKey = getComfyServerKey(ctx, serverName)
+      const cacheKey = `${_.session.cid}|${serverKey}`
+
       // 清除缓存
       if (_.options.clean) {
-        userImages.delete(_.session.cid)
+        userImages.delete(cacheKey)
         return '图片缓存已清除。'
       }
 
@@ -61,7 +72,7 @@ export function registerComfyCommand(ctx: Context) {
       // 交互式上传模式
       if (_.options.watch) {
         if (imgQu.length > 0) {
-          const comfyNode = getSharedComfyUINode(ctx)
+          const comfyNode = getSharedComfyUINode(ctx, serverName)
           let count = 0
           const list: { uploadedPath: string }[] = []
 
@@ -89,7 +100,7 @@ export function registerComfyCommand(ctx: Context) {
             }
           }
 
-          userImages.set(_.session.cid, list)
+          userImages.set(cacheKey, list)
           if (count > 0) {
             const total = list.length
             await _.session.send(
@@ -102,8 +113,8 @@ export function registerComfyCommand(ctx: Context) {
         }
 
         await _.session.send('进入交互式上传模式。请发送图片，支持多张发送，发送“结束”退出。')
-        userImages.set(_.session.cid, [])
-        const comfyNode = getSharedComfyUINode(ctx)
+        userImages.set(cacheKey, [])
+        const comfyNode = getSharedComfyUINode(ctx, serverName)
 
         while (true) {
           const content = await _.session.prompt()
@@ -112,7 +123,7 @@ export function registerComfyCommand(ctx: Context) {
             break
           }
           if (content === '结束') {
-            await _.session.send(`退出交互模式。共缓存 ${userImages.get(_.session.cid)?.length || 0} 张图片。`)
+            await _.session.send(`退出交互模式。共缓存 ${userImages.get(cacheKey)?.length || 0} 张图片。`)
             break
           }
 
@@ -132,9 +143,9 @@ export function registerComfyCommand(ctx: Context) {
               filename,
             )
             if (result.success && result.uploadedPath) {
-              const list = userImages.get(_.session.cid) || []
+              const list = userImages.get(cacheKey) || []
               list.push({ uploadedPath: result.uploadedPath })
-              userImages.set(_.session.cid, list)
+              userImages.set(cacheKey, list)
               count++
             } else if (result.error) {
               await _.session.send(
@@ -145,7 +156,7 @@ export function registerComfyCommand(ctx: Context) {
             }
           }
           if (count > 0) {
-            const total = userImages.get(_.session.cid)?.length || 0
+            const total = userImages.get(cacheKey)?.length || 0
             await _.session.send(`成功接收 ${count} 张图片，当前共缓存 ${total} 张。`)
           }
         }
@@ -177,7 +188,7 @@ export function registerComfyCommand(ctx: Context) {
       try {
         const { json: promptJson, outputNodeIDArr } = loadWorkflow(ctx, targetWorkflow)
         const finalUserPrompt = sanitizeUserPrompt(userPrompt)
-        const comfyNode = getSharedComfyUINode(ctx)
+        const comfyNode = getSharedComfyUINode(ctx, serverName)
 
         // 构建占位符参数（动态 image1、image2…）
         const promptParams: Record<string, any> = {
@@ -186,7 +197,7 @@ export function registerComfyCommand(ctx: Context) {
         }
 
         let imageIndex = 1
-        const cachedImages = userImages.get(_.session.cid) || []
+        const cachedImages = userImages.get(cacheKey) || []
 
         // 1. 填充缓存图片
         for (const img of cachedImages) {
@@ -237,7 +248,8 @@ export function registerComfyCommand(ctx: Context) {
         const result: any = await comfyNode.executePromptWorkflow(_promptJson, async () => {
           workingMessageIds = await _.session.send(h('p', quote, '任务已提交，正在生成...'))
         })
-
+  
+        console.log('工作流执行成功1:', result)
         if (result.success) {
           const finalResult: any[] = []
           outputNodeIDArr.forEach((outputNodeID) => {
@@ -255,6 +267,7 @@ export function registerComfyCommand(ctx: Context) {
               })
             }
           })
+          console.log('工作流执行成功:', finalResult)
           return finalResult.map((item) => item.html)
         } else {
           console.error('工作流执行失败:', result.error)

@@ -12,10 +12,12 @@
 ## ✨ 功能特性
 
 - 支持多工作流：在 Koishi 数据目录维护 `index.json`，按名称选择不同工作流模板
+- 支持多服务器：可配置多个 ComfyUI 服务端，并在指令中选择
 - 文/图生图：`comfy` / `cf` 指令，支持引用图片自动上传
 - 多图输入：引用的多张图片会依次映射为 `{{image1}}`、`{{image2}}`……
 - 交互式上传：`cf --wt` 连续缓存多张图片，后续指令自动使用缓存
-- 缓存管理：`cf --cl` 清除当前会话的图片缓存
+- 缓存管理：`cf --cl` 清除当前会话的图片缓存（按服务器隔离）
+- 服务器列表：`comfysv` / `cfsv` 查看可用服务器与默认服务器
 - 自动通信：内部处理 HTTP 请求与 WebSocket 监听，提交任务并等待执行结束
 
 ## ✅ 运行前提
@@ -40,8 +42,10 @@ pnpm add koishi-plugin-comfyui-workflow
 
 | 配置项                  | 类型        | 默认值              | 描述                              |
 | -------------------- | --------- | ---------------- | ------------------------------- |
-| `serverEndpoint`     | `string`  | `127.0.0.1:8188` | ComfyUI 服务器地址，格式：`域名/IP:端口`     |
-| `isSecureConnection` | `boolean` | `false`          | 是否使用 `https` 与 `wss`            |
+| `servers`            | `array`   | `[]`             | ComfyUI 服务器列表（`name/endpoint/isSecureConnection`） |
+| `defaultServer`      | `string`  | `''`             | 默认服务器名称（留空则取 `servers` 第一个；未配置 `servers` 时回退旧配置） |
+| `serverEndpoint`     | `string`  | `127.0.0.1:8188` | 单服务器地址（兼容旧配置；未配置 `servers` 时生效） |
+| `isSecureConnection` | `boolean` | `false`          | 单服务器是否使用 `https/wss`（兼容旧配置；未配置 `servers` 时生效） |
 | `defaultWorkflow`    | `string`  | `default`        | 默认工作流名称（对应 `index.json` 里的键名）   |
 | `comfyuiSubfolder`   | `string`  | `temp`           | 上传图片的子目录（ComfyUI input 下的子文件夹名） |
 
@@ -64,6 +68,12 @@ comfyls.init
 comfyls
 ```
 
+1. （可选）查看服务器列表：
+
+```
+comfysv
+```
+
 1. 直接执行默认工作流：
 
 ```
@@ -74,6 +84,12 @@ comfy 一只坐在沙发上的可爱猫猫
 
 ```
 cf --wf <工作流名称> 赛博朋克城市夜景
+```
+
+1. 指定服务器执行：
+
+```
+cf --sv <服务器名称> 一只戴墨镜的猫
 ```
 
 ## 🧩 指令说明
@@ -88,6 +104,7 @@ cf [提示词]
 常用参数：
 
 - `--wf <workflow>`：指定工作流名称（不传则使用 `defaultWorkflow`）
+- `--sv [server]`：选择服务器名称（不传则使用 `defaultServer` 或 `servers` 第一个；未配置 `servers` 时回退旧配置）
 - `--wi [width]`：图片宽（默认 768）
 - `--he [height]`：图片高（默认 1344）
 - `--sa [sampler]`：采样器（默认 euler\_ancestral）
@@ -95,6 +112,15 @@ cf [提示词]
 - `--se [seed]`：随机种子（不传则自动随机）
 - `--wt`：进入交互式上传图片模式（见下文）
 - `--cl`：清除当前会话的图片缓存
+
+### comfysv / cfsv
+
+```
+comfysv
+cfsv
+```
+
+列出当前已配置的服务器列表，并标记默认服务器。
 
 ### comfyls / cfls
 
@@ -227,7 +253,8 @@ cf --cl
 
 ### 连接失败 / 无法拉取结果
 
-- 检查 `serverEndpoint` 是否能从 Koishi 机器访问（远程 ComfyUI 时最常见）
+- 多服务器模式下，先用 `comfysv` 确认服务器配置是否正确
+- 检查 ComfyUI 地址是否能从 Koishi 机器访问（远程 ComfyUI 时最常见）
 - `isSecureConnection=true` 时，对应 ComfyUI 必须能通过 `https/wss` 访问
 
 ### 图片上传失败

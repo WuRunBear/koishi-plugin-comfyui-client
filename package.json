@@ -21,10 +21,10 @@
   "contributors": [
     "WuRunBear"
   ],
-  "homepage": "https://github.com/WuRunBear/koishi-plugin-comfyui-client",
+  "homepage": "https://github.com/WuRunBear/koishi-plugin-comfyui-workflow",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/WuRunBear/koishi-plugin-comfyui-client.git"
+    "url": "git+https://github.com/WuRunBear/koishi-plugin-comfyui-workflow.git"
   },
   "peerDependencies": {
     "koishi": "^4.18.0"
