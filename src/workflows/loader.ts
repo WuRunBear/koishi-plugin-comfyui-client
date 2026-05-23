@@ -19,7 +19,7 @@ function resolvePaths(ctx: Context) {
   const sampleWorkflowPath = path.join(workflowsPath, 'sample-workflow.json')
   return { root, workflowsPath, indexPath, sampleWorkflowPath }
 }
-
+ 
 export async function ensureWorkflowFiles(ctx: Context) {
   const { workflowsPath, indexPath, sampleWorkflowPath } = resolvePaths(ctx)
   await fs.promises.mkdir(workflowsPath, { recursive: true })
