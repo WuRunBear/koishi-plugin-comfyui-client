@@ -65,8 +65,9 @@ export function registerComfyCommand(ctx: Context) {
 
       const message = _.session.event.message
       let imgQu: any[] = []
+      imgQu = h.select(message.elements || [], 'img')
       if (message.quote) {
-        imgQu = h.select(message.quote.elements, 'img')
+        imgQu = imgQu.concat(h.select(message.quote.elements, 'img'))
       }
 
       // 交互式上传模式
@@ -163,8 +164,14 @@ export function registerComfyCommand(ctx: Context) {
         return
       }
 
-      if (message.quote && userPrompt) {
-        userPrompt = userPrompt.replaceAll(h.unescape(message.quote.content), ' ')
+      if (userPrompt) {
+        userPrompt = userPrompt
+          .replace(/<img[^>]*>/g, ' ')
+          .replace(/\[图\d*\]/g, ' ')
+        const quoted = message.quote ? h.unescape(message.quote.content || '') : ''
+        if (quoted) {
+          userPrompt = userPrompt.replaceAll(quoted, ' ')
+        }
       }
 
       // 支持多图：构建 images 列表
