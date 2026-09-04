@@ -168,7 +168,10 @@ export function registerComfyCommand(ctx: Context) {
         userPrompt = userPrompt
           .replace(/<img[^>]*>/g, ' ')
           .replace(/\[图\d*\]/g, ' ')
-          .replaceAll(h.unescape(message.quote ? message.quote.content : ''), ' ')
+        const quoted = message.quote ? h.unescape(message.quote.content || '') : ''
+        if (quoted) {
+          userPrompt = userPrompt.replaceAll(quoted, ' ')
+        }
       }
 
       // 支持多图：构建 images 列表
