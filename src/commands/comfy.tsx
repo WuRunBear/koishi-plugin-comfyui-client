@@ -42,6 +42,7 @@ export function registerComfyCommand(ctx: Context) {
     .option('height', '--he [height] 图片高', { fallback: 1344 })
     .option('sampler', '--sa [sampler] 采样器', { fallback: 'euler_ancestral' })
     .option('scheduler', '--sc [scheduler] 调度器', { fallback: 'karras' })
+    .option('denoise', '--de [denoise] 重绘幅度0-1', { fallback: 0.6 })
     .option('seed', '--se [seed] 随机种')
     .option('workflow', '--wf <workflow> 指定工作流名称')
     .option('watch', '--wt 交互式上传图片')
