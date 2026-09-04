@@ -44,6 +44,7 @@ export function registerComfyCommand(ctx: Context) {
     .option('scheduler', '--sc [scheduler] 调度器', { fallback: 'karras' })
     .option('seed', '--se [seed] 随机种')
     .option('workflow', '--wf <workflow> 指定工作流名称')
+    .option('count', '--co [count] 生成数量 1-9', { fallback: 1 })
     .option('watch', '--wt 交互式上传图片')
     .option('clean', '--cl 清除图片缓存')
     .action(async (_, userPrompt) => {
@@ -236,22 +237,37 @@ export function registerComfyCommand(ctx: Context) {
           promptParams['image'] = promptParams['image1']
         }
 
-        let _promptJson = JSON.parse(
-          applyPlaceholders(promptJson, promptParams),
-        )
-
-        _promptJson = comfyNode.updateSeed(_promptJson, _.options.seed)
-
         const quote = h('quote', { id: _.session.messageId })
         let workingMessageIds = ['']
 
-        const result: any = await comfyNode.executePromptWorkflow(_promptJson, async () => {
-          workingMessageIds = await _.session.send(h('p', quote, '任务已提交，正在生成...'))
-        })
-  
-        console.log('工作流执行成功1:', result)
-        if (result.success) {
-          const finalResult: any[] = []
+        // 生成数量：--co [count]，范围 1-9，默认 1
+        const count = Math.max(1, Math.min(Number(_.options.count) || 1, 9))
+        const finalResult: any[] = []
+        let firstError: any = null
+
+        for (let i = 0; i < count; i++) {
+          // 每次迭代独立随机 seed；指定了 --se 则按 seed+i 递增（不同且可复现）
+          const iterSeed = _.options.seed != null ? Number(_.options.seed) + i : undefined
+          const _promptJson = JSON.parse(applyPlaceholders(promptJson, promptParams))
+          comfyNode.updateSeed(_promptJson, iterSeed)
+
+          const result: any = await comfyNode.executePromptWorkflow(_promptJson, async () => {
+            if (i === 0) {
+              workingMessageIds = await _.session.send(
+                h('p', quote, count > 1 ? `任务已提交，正在生成 (1/${count})...` : '任务已提交，正在生成...'),
+              )
+            } else {
+              await _.session.send(h('p', quote, `正在生成 (${i + 1}/${count})...`))
+            }
+          })
+
+          console.log('工作流执行成功1:', result)
+          if (!result.success) {
+            console.error('工作流执行失败:', result.error)
+            firstError = result
+            break
+          }
+
           outputNodeIDArr.forEach((outputNodeID) => {
             if (result.outputs[outputNodeID]) {
               result.outputs[outputNodeID].images.map((item) => {
@@ -267,12 +283,13 @@ export function registerComfyCommand(ctx: Context) {
               })
             }
           })
-          console.log('工作流执行成功:', finalResult)
-          return finalResult.map((item) => item.html)
-        } else {
-          console.error('工作流执行失败:', result.error)
-          return `工作流执行失败 ${result.error.error.message} \n 参数：${JSON.stringify(_.options)} prompt: ${userPrompt}`
         }
+
+        if (firstError) {
+          return `工作流执行失败 ${firstError.error.error.message} \n 参数：${JSON.stringify(_.options)} prompt: ${userPrompt}`
+        }
+        console.log('工作流执行成功:', finalResult)
+        return finalResult.map((item) => item.html)
       } catch (error: any) {
         console.error('执行工作流时发生错误:', error)
         return `执行工作流时发生错误: ${error.message} \n 参数：${JSON.stringify(_.options)} prompt: ${userPrompt}`
